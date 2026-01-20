@@ -394,7 +394,7 @@ server.registerTool(
   "create_entities",
   {
     title: "Create Entities",
-    description: "Create multiple new entities in the knowledge graph with metadata (agent thread ID, timestamp, confidence)",
+    description: "Create multiple new entities in the knowledge graph with metadata (agent thread ID, timestamp, confidence, importance)",
     inputSchema: {
       entities: z.array(EntitySchema)
     },
@@ -416,7 +416,7 @@ server.registerTool(
   "create_relations",
   {
     title: "Create Relations",
-    description: "Create multiple new relations between entities in the knowledge graph with metadata (agent thread ID, timestamp, confidence). Relations should be in active voice",
+    description: "Create multiple new relations between entities in the knowledge graph with metadata (agent thread ID, timestamp, confidence, importance). Relations should be in active voice",
     inputSchema: {
       relations: z.array(RelationSchema)
     },
