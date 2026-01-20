@@ -820,7 +820,7 @@ export class KnowledgeGraphManager {
     
     // Build conversation summaries
     const conversations = Array.from(threadMap.entries()).map(([agentThreadId, data]) => {
-      const timestamps = data.timestamps.sort();
+      const timestamps = data.timestamps.sort((a, b) => a.localeCompare(b));
       return {
         agentThreadId,
         entityCount: data.entities.length,
