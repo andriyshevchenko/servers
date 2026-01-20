@@ -20,6 +20,7 @@ Each entity now includes:
 - `agentThreadId`: Unique identifier for the agent thread
 - `timestamp`: ISO 8601 timestamp of creation
 - `confidence`: Confidence score (0.0 to 1.0)
+- `importance`: Importance for memory integrity if lost (0.0 = not important, 1.0 = critical)
 
 ### Relations
 Each relation now includes:
@@ -29,6 +30,7 @@ Each relation now includes:
 - `agentThreadId`: Unique identifier for the agent thread
 - `timestamp`: ISO 8601 timestamp of creation
 - `confidence`: Confidence score (0.0 to 1.0)
+- `importance`: Importance for memory integrity if lost (0.0 = not important, 1.0 = critical)
 
 ## Storage Architecture
 
@@ -50,15 +52,16 @@ The server stores data in separate JSONL files per agent thread:
 
 ## Available Tools
 
-1. **create_entities**: Create new entities with metadata
-2. **create_relations**: Create relationships between entities with metadata
-3. **add_observations**: Add observations to existing entities with metadata
+1. **create_entities**: Create new entities with metadata (including importance)
+2. **create_relations**: Create relationships between entities with metadata (including importance)
+3. **add_observations**: Add observations to existing entities with metadata (including importance)
 4. **delete_entities**: Remove entities and cascading relations
 5. **delete_observations**: Remove specific observations
 6. **delete_relations**: Delete relationships
 7. **read_graph**: Read the entire knowledge graph
 8. **search_nodes**: Search entities by name, type, or observation content
 9. **open_nodes**: Retrieve specific entities by name
+10. **query_nodes**: Advanced querying with range-based filtering by timestamp, confidence, and importance
 
 ## Usage
 
@@ -85,7 +88,7 @@ MEMORY_DIR_PATH=/path/to/memory/directory npx mcp-server-memory-enhanced
 ## Example
 
 ```typescript
-// Create entities with metadata
+// Create entities with metadata including importance
 await createEntities({
   entities: [
     {
@@ -94,12 +97,13 @@ await createEntities({
       observations: ["works at Acme Corp"],
       agentThreadId: "thread-001",
       timestamp: "2024-01-20T10:00:00Z",
-      confidence: 0.95
+      confidence: 0.95,
+      importance: 0.9  // Critical entity
     }
   ]
 });
 
-// Create relations with metadata
+// Create relations with metadata including importance
 await createRelations({
   relations: [
     {
@@ -108,9 +112,18 @@ await createRelations({
       relationType: "knows",
       agentThreadId: "thread-001",
       timestamp: "2024-01-20T10:01:00Z",
-      confidence: 0.9
+      confidence: 0.9,
+      importance: 0.75  // Important relationship
     }
   ]
+});
+
+// Query nodes with range-based filtering
+await queryNodes({
+  timestampStart: "2024-01-20T09:00:00Z",
+  timestampEnd: "2024-01-20T11:00:00Z",
+  confidenceMin: 0.8,
+  importanceMin: 0.7  // Only get important items
 });
 ```
 

@@ -38,6 +38,7 @@ export interface Entity {
   agentThreadId: string;
   timestamp: string;
   confidence: number;
+  importance: number; // 0-1: importance for memory integrity (0=not important, 1=critical)
 }
 
 // Enhanced relation with metadata
@@ -48,6 +49,7 @@ export interface Relation {
   agentThreadId: string;
   timestamp: string;
   confidence: number;
+  importance: number; // 0-1: importance for memory integrity (0=not important, 1=critical)
 }
 
 export interface KnowledgeGraph {
@@ -76,7 +78,8 @@ export class KnowledgeGraphManager {
             observations: item.observations,
             agentThreadId: item.agentThreadId,
             timestamp: item.timestamp,
-            confidence: item.confidence
+            confidence: item.confidence,
+            importance: item.importance
           });
         }
         if (item.type === "relation") {
@@ -86,7 +89,8 @@ export class KnowledgeGraphManager {
             relationType: item.relationType,
             agentThreadId: item.agentThreadId,
             timestamp: item.timestamp,
-            confidence: item.confidence
+            confidence: item.confidence,
+            importance: item.importance
           });
         }
         return graph;
@@ -123,7 +127,8 @@ export class KnowledgeGraphManager {
         observations: e.observations,
         agentThreadId: e.agentThreadId,
         timestamp: e.timestamp,
-        confidence: e.confidence
+        confidence: e.confidence,
+        importance: e.importance
       })),
       ...relations.map(r => JSON.stringify({
         type: "relation",
@@ -132,7 +137,8 @@ export class KnowledgeGraphManager {
         relationType: r.relationType,
         agentThreadId: r.agentThreadId,
         timestamp: r.timestamp,
-        confidence: r.confidence
+        confidence: r.confidence,
+        importance: r.importance
       })),
     ];
     await fs.writeFile(threadFilePath, lines.join("\n"));
@@ -188,7 +194,7 @@ export class KnowledgeGraphManager {
     return newRelations;
   }
 
-  async addObservations(observations: { entityName: string; contents: string[]; agentThreadId: string; timestamp: string; confidence: number }[]): Promise<{ entityName: string; addedObservations: string[] }[]> {
+  async addObservations(observations: { entityName: string; contents: string[]; agentThreadId: string; timestamp: string; confidence: number; importance: number }[]): Promise<{ entityName: string; addedObservations: string[] }[]> {
     const graph = await this.loadGraph();
     const results = observations.map(o => {
       const entity = graph.entities.find(e => e.name === o.entityName);
@@ -202,6 +208,7 @@ export class KnowledgeGraphManager {
         entity.agentThreadId = o.agentThreadId;
         entity.timestamp = o.timestamp;
         entity.confidence = o.confidence;
+        entity.importance = o.importance;
       }
       return { entityName: o.entityName, addedObservations: newObservations };
     });
@@ -290,6 +297,67 @@ export class KnowledgeGraphManager {
   
     return filteredGraph;
   }
+
+  async queryNodes(filters?: {
+    timestampStart?: string;
+    timestampEnd?: string;
+    confidenceMin?: number;
+    confidenceMax?: number;
+    importanceMin?: number;
+    importanceMax?: number;
+  }): Promise<KnowledgeGraph> {
+    const graph = await this.loadGraph();
+    
+    // If no filters provided, return entire graph
+    if (!filters) {
+      return graph;
+    }
+    
+    // Apply filters to entities
+    const filteredEntities = graph.entities.filter(e => {
+      // Timestamp range filter
+      if (filters.timestampStart && e.timestamp < filters.timestampStart) return false;
+      if (filters.timestampEnd && e.timestamp > filters.timestampEnd) return false;
+      
+      // Confidence range filter
+      if (filters.confidenceMin !== undefined && e.confidence < filters.confidenceMin) return false;
+      if (filters.confidenceMax !== undefined && e.confidence > filters.confidenceMax) return false;
+      
+      // Importance range filter
+      if (filters.importanceMin !== undefined && e.importance < filters.importanceMin) return false;
+      if (filters.importanceMax !== undefined && e.importance > filters.importanceMax) return false;
+      
+      return true;
+    });
+  
+    // Create a Set of filtered entity names for quick lookup
+    const filteredEntityNames = new Set(filteredEntities.map(e => e.name));
+  
+    // Apply filters to relations (and ensure they connect filtered entities)
+    const filteredRelations = graph.relations.filter(r => {
+      // Must connect filtered entities
+      if (!filteredEntityNames.has(r.from) || !filteredEntityNames.has(r.to)) return false;
+      
+      // Timestamp range filter
+      if (filters.timestampStart && r.timestamp < filters.timestampStart) return false;
+      if (filters.timestampEnd && r.timestamp > filters.timestampEnd) return false;
+      
+      // Confidence range filter
+      if (filters.confidenceMin !== undefined && r.confidence < filters.confidenceMin) return false;
+      if (filters.confidenceMax !== undefined && r.confidence > filters.confidenceMax) return false;
+      
+      // Importance range filter
+      if (filters.importanceMin !== undefined && r.importance < filters.importanceMin) return false;
+      if (filters.importanceMax !== undefined && r.importance > filters.importanceMax) return false;
+      
+      return true;
+    });
+  
+    return {
+      entities: filteredEntities,
+      relations: filteredRelations,
+    };
+  }
 }
 
 let knowledgeGraphManager: KnowledgeGraphManager;
@@ -301,7 +369,8 @@ const EntitySchema = z.object({
   observations: z.array(z.string()).describe("An array of observation contents associated with the entity"),
   agentThreadId: z.string().describe("The agent thread ID that created this entity"),
   timestamp: z.string().describe("ISO 8601 timestamp of when the entity was created"),
-  confidence: z.number().min(0).max(1).describe("Confidence coefficient from 0 to 1")
+  confidence: z.number().min(0).max(1).describe("Confidence coefficient from 0 to 1"),
+  importance: z.number().min(0).max(1).describe("Importance for memory integrity if lost: 0 (not important) to 1 (critical)")
 });
 
 const RelationSchema = z.object({
@@ -310,7 +379,8 @@ const RelationSchema = z.object({
   relationType: z.string().describe("The type of the relation"),
   agentThreadId: z.string().describe("The agent thread ID that created this relation"),
   timestamp: z.string().describe("ISO 8601 timestamp of when the relation was created"),
-  confidence: z.number().min(0).max(1).describe("Confidence coefficient from 0 to 1")
+  confidence: z.number().min(0).max(1).describe("Confidence coefficient from 0 to 1"),
+  importance: z.number().min(0).max(1).describe("Importance for memory integrity if lost: 0 (not important) to 1 (critical)")
 });
 
 // The server instance and tools exposed to Claude
@@ -368,14 +438,15 @@ server.registerTool(
   "add_observations",
   {
     title: "Add Observations",
-    description: "Add new observations to existing entities in the knowledge graph with metadata (agent thread ID, timestamp, confidence)",
+    description: "Add new observations to existing entities in the knowledge graph with metadata (agent thread ID, timestamp, confidence, importance)",
     inputSchema: {
       observations: z.array(z.object({
         entityName: z.string().describe("The name of the entity to add the observations to"),
         contents: z.array(z.string()).describe("An array of observation contents to add"),
         agentThreadId: z.string().describe("The agent thread ID adding these observations"),
         timestamp: z.string().describe("ISO 8601 timestamp of when the observations are added"),
-        confidence: z.number().min(0).max(1).describe("Confidence coefficient from 0 to 1")
+        confidence: z.number().min(0).max(1).describe("Confidence coefficient from 0 to 1"),
+        importance: z.number().min(0).max(1).describe("Importance for memory integrity if lost: 0 (not important) to 1 (critical)")
       }))
     },
     outputSchema: {
@@ -526,6 +597,34 @@ server.registerTool(
   },
   async ({ names }) => {
     const graph = await knowledgeGraphManager.openNodes(names);
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(graph, null, 2) }],
+      structuredContent: { ...graph }
+    };
+  }
+);
+
+// Register query_nodes tool for advanced filtering
+server.registerTool(
+  "query_nodes",
+  {
+    title: "Query Nodes",
+    description: "Query nodes and relations in the knowledge graph with advanced filtering by timestamp, confidence, and importance ranges",
+    inputSchema: {
+      timestampStart: z.string().optional().describe("ISO 8601 timestamp - filter for items created on or after this time"),
+      timestampEnd: z.string().optional().describe("ISO 8601 timestamp - filter for items created on or before this time"),
+      confidenceMin: z.number().min(0).max(1).optional().describe("Minimum confidence value (0-1)"),
+      confidenceMax: z.number().min(0).max(1).optional().describe("Maximum confidence value (0-1)"),
+      importanceMin: z.number().min(0).max(1).optional().describe("Minimum importance value (0-1)"),
+      importanceMax: z.number().min(0).max(1).optional().describe("Maximum importance value (0-1)")
+    },
+    outputSchema: {
+      entities: z.array(EntitySchema),
+      relations: z.array(RelationSchema)
+    }
+  },
+  async (filters) => {
+    const graph = await knowledgeGraphManager.queryNodes(filters);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(graph, null, 2) }],
       structuredContent: { ...graph }
