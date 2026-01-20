@@ -90,16 +90,39 @@ npm install @modelcontextprotocol/server-memory-enhanced
 
 ### Running the Server
 
+#### Stdio Transport (Default)
+
 ```bash
 npx mcp-server-memory-enhanced
 ```
 
-### Configuration
+#### HTTP Transport
 
-Set the `MEMORY_DIR_PATH` environment variable to customize the storage location:
+To run the server with HTTP transport (using Server-Sent Events for streaming):
 
 ```bash
+MCP_TRANSPORT=http PORT=3000 npx mcp-server-memory-enhanced
+```
+
+The server will be available at `http://127.0.0.1:3000/mcp` with a health check endpoint at `http://127.0.0.1:3000/health`.
+
+### Configuration
+
+Environment variables:
+
+- `MEMORY_DIR_PATH`: Customize the storage location (default: `./memory-data`)
+- `MCP_TRANSPORT`: Transport mode - `stdio` (default) or `http`
+- `PORT`: HTTP server port (default: `3000`, only used with HTTP transport)
+- `HOST`: HTTP server host (default: `127.0.0.1`, only used with HTTP transport)
+
+Examples:
+
+```bash
+# Stdio transport with custom memory directory
 MEMORY_DIR_PATH=/path/to/memory/directory npx mcp-server-memory-enhanced
+
+# HTTP transport with custom port and memory directory
+MCP_TRANSPORT=http PORT=8080 MEMORY_DIR_PATH=/path/to/memory/directory npx mcp-server-memory-enhanced
 ```
 
 ## Example

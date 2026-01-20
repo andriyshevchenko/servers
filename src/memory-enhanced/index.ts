@@ -2,6 +2,9 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
+import express from "express";
 import { z } from "zod";
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -1369,9 +1372,55 @@ async function main() {
   // Initialize knowledge graph manager with the memory directory path
   knowledgeGraphManager = new KnowledgeGraphManager(MEMORY_DIR_PATH);
 
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error("Enhanced Knowledge Graph MCP Server running on stdio");
+  // Determine transport mode from environment variable (default to stdio for backward compatibility)
+  const transportMode = process.env.MCP_TRANSPORT?.toLowerCase() || 'stdio';
+  const port = parseInt(process.env.PORT || '3000', 10);
+  const host = process.env.HOST || '127.0.0.1';
+
+  if (transportMode === 'http' || transportMode === 'sse') {
+    // HTTP/SSE transport mode
+    console.error(`Starting Enhanced Knowledge Graph MCP Server on HTTP (${host}:${port})`);
+    
+    const app = createMcpExpressApp({ host });
+    
+    // Create a single transport instance for StreamableHTTP
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    });
+    
+    // Connect server to transport
+    await server.connect(transport);
+    console.error('MCP Server connected to StreamableHTTP transport');
+    
+    // Health check endpoint
+    app.get('/health', (req, res) => {
+      res.json({ status: 'ok', version: '0.2.0', transport: 'http' });
+    });
+    
+    // MCP endpoint for StreamableHTTP transport - handles both GET and POST
+    app.all('/mcp', async (req, res) => {
+      try {
+        await transport.handleRequest(req, res);
+      } catch (error) {
+        console.error('Error handling MCP request:', error);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Internal server error' });
+        }
+      }
+    });
+    
+    app.listen(port, host, () => {
+      console.error(`Enhanced Knowledge Graph MCP Server running on http://${host}:${port}/mcp`);
+      console.error(`Health check available at http://${host}:${port}/health`);
+      console.error(`Memory directory: ${MEMORY_DIR_PATH}`);
+    });
+  } else {
+    // Default stdio transport mode
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    console.error("Enhanced Knowledge Graph MCP Server running on stdio");
+    console.error(`Memory directory: ${MEMORY_DIR_PATH}`);
+  }
 }
 
 main().catch((error) => {
