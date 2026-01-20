@@ -1385,7 +1385,7 @@ async function main() {
     
     // Create a single transport instance for StreamableHTTP
     const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: () => `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      sessionIdGenerator: () => `session-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
     });
     
     // Connect server to transport
