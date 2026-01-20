@@ -74,7 +74,7 @@ export class KnowledgeGraphManager {
         try {
           item = JSON.parse(line);
         } catch (parseError) {
-          console.warn(`Skipping malformed JSON line in ${filePath}: ${line.substring(0, 100)}...`, parseError);
+          console.warn(`Skipping malformed JSON line in ${filePath} (line length: ${line.length} chars)`);
           return graph;
         }
         
@@ -153,8 +153,11 @@ export class KnowledgeGraphManager {
     if (lines.length === 0) {
       try {
         await fs.unlink(threadFilePath);
-      } catch {
-        // Ignore errors (e.g., file does not exist)
+      } catch (error) {
+        // Only ignore ENOENT errors (file doesn't exist)
+        if (error instanceof Error && 'code' in error && (error as any).code !== 'ENOENT') {
+          console.warn(`Failed to delete empty thread file ${threadFilePath}:`, error);
+        }
       }
       return;
     }
