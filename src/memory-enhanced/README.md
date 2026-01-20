@@ -32,6 +32,16 @@ Each relation now includes:
 
 ## Storage Architecture
 
+The server implements a **collaborative knowledge graph** where multiple agent threads contribute to a shared graph:
+
+### Design Principles
+- **Shared Entities**: Entity names are globally unique across all threads. If entity "Alice" exists, all threads reference the same entity.
+- **Shared Relations**: Relations are unique by (from, to, relationType) across all threads.
+- **Metadata Tracking**: Each entity and relation tracks which agent thread created it via `agentThreadId`, along with `timestamp` and `confidence`.
+- **Distributed Storage**: Data is physically stored in separate JSONL files per thread for organization and performance.
+- **Aggregated Reads**: Read operations combine data from all thread files to provide a complete view of the knowledge graph.
+
+### File Organization
 The server stores data in separate JSONL files per agent thread:
 - Default location: `./memory-data/thread-{agentThreadId}.jsonl`
 - Custom location: Set `MEMORY_DIR_PATH` environment variable

@@ -166,6 +166,8 @@ export class KnowledgeGraphManager {
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
     const graph = await this.loadGraph();
+    // Entity names are globally unique across all threads in the collaborative knowledge graph
+    // This prevents duplicate entities while allowing multiple threads to contribute to the same entity
     const newEntities = entities.filter(e => !graph.entities.some(existingEntity => existingEntity.name === e.name));
     graph.entities.push(...newEntities);
     await this.saveGraph(graph);
@@ -174,6 +176,8 @@ export class KnowledgeGraphManager {
 
   async createRelations(relations: Relation[]): Promise<Relation[]> {
     const graph = await this.loadGraph();
+    // Relations are globally unique by (from, to, relationType) across all threads
+    // This enables multiple threads to collaboratively build the knowledge graph
     const newRelations = relations.filter(r => !graph.relations.some(existingRelation => 
       existingRelation.from === r.from && 
       existingRelation.to === r.to && 
@@ -225,6 +229,8 @@ export class KnowledgeGraphManager {
 
   async deleteRelations(relations: Relation[]): Promise<void> {
     const graph = await this.loadGraph();
+    // Delete relations globally across all threads by matching (from, to, relationType)
+    // In a collaborative knowledge graph, deletions affect all threads
     graph.relations = graph.relations.filter(r => !relations.some(delRelation => 
       r.from === delRelation.from && 
       r.to === delRelation.to && 
