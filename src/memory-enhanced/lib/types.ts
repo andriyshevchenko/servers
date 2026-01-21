@@ -64,3 +64,41 @@ export interface ValidationResult {
   error?: string;
   suggestion?: string;
 }
+
+// Types for get_analytics tool (Analytics section of spec)
+export interface GetAnalyticsInput {
+  threadId: string;
+}
+
+export interface GetAnalyticsOutput {
+  // 1. Recent changes (chronological)
+  recent_changes: Array<{
+    entityName: string;
+    entityType: string;
+    lastModified: string; // ISO timestamp
+    changeType: 'created' | 'updated';
+  }>;
+  
+  // 2. Top by importance
+  top_important: Array<{
+    entityName: string;
+    entityType: string;
+    importance: number;
+    observationCount: number;
+  }>;
+  
+  // 3. Most connected (graph centrality)
+  most_connected: Array<{
+    entityName: string;
+    entityType: string;
+    relationCount: number;
+    connectedTo: string[]; // Entity names
+  }>;
+  
+  // 4. Orphaned entities (quality check)
+  orphaned_entities: Array<{
+    entityName: string;
+    entityType: string;
+    reason: 'no_relations' | 'broken_relation';
+  }>;
+}

@@ -62,3 +62,34 @@ export const SaveMemoryOutputSchema = z.object({
   quality_score: z.number().min(0).max(1),
   validation_errors: z.array(z.string()).optional()
 });
+
+// Schema for get_analytics tool (Analytics section of spec)
+export const GetAnalyticsInputSchema = z.object({
+  threadId: z.string().min(1).describe("Thread ID for this conversation/project")
+});
+
+export const GetAnalyticsOutputSchema = z.object({
+  recent_changes: z.array(z.object({
+    entityName: z.string(),
+    entityType: z.string(),
+    lastModified: z.string().describe("ISO timestamp"),
+    changeType: z.enum(['created', 'updated'])
+  })),
+  top_important: z.array(z.object({
+    entityName: z.string(),
+    entityType: z.string(),
+    importance: z.number().min(0).max(1),
+    observationCount: z.number()
+  })),
+  most_connected: z.array(z.object({
+    entityName: z.string(),
+    entityType: z.string(),
+    relationCount: z.number(),
+    connectedTo: z.array(z.string()).describe("Entity names")
+  })),
+  orphaned_entities: z.array(z.object({
+    entityName: z.string(),
+    entityType: z.string(),
+    reason: z.enum(['no_relations', 'broken_relation'])
+  }))
+});

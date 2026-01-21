@@ -8,13 +8,15 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 // Import modular components
-import { Entity, Relation, KnowledgeGraph, SaveMemoryInput } from './lib/types.js';
+import { Entity, Relation, KnowledgeGraph, SaveMemoryInput, GetAnalyticsInput } from './lib/types.js';
 import { KnowledgeGraphManager } from './lib/knowledge-graph-manager.js';
 import { 
   EntitySchema, 
   RelationSchema, 
   SaveMemoryInputSchema, 
-  SaveMemoryOutputSchema 
+  SaveMemoryOutputSchema,
+  GetAnalyticsInputSchema,
+  GetAnalyticsOutputSchema
 } from './lib/schemas.js';
 import { handleSaveMemory } from './lib/save-memory-handler.js';
 
@@ -587,6 +589,24 @@ server.registerTool(
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
       structuredContent: result
+    };
+  }
+);
+
+// Register get_analytics tool
+server.registerTool(
+  "get_analytics",
+  {
+    title: "Get Analytics",
+    description: "Get analytics for a specific thread with 4 core metrics: recent changes, top important entities, most connected entities, and orphaned entities",
+    inputSchema: GetAnalyticsInputSchema,
+    outputSchema: GetAnalyticsOutputSchema
+  },
+  async (input: GetAnalyticsInput) => {
+    const result = await knowledgeGraphManager.getAnalytics(input.threadId);
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      structuredContent: result as any
     };
   }
 );

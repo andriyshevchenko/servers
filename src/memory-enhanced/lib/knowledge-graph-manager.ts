@@ -783,5 +783,131 @@ export class KnowledgeGraphManager {
     
     return { conversations };
   }
+
+  // Analytics: Get analytics for a specific thread (limited to 4 core metrics)
+  async getAnalytics(threadId: string): Promise<{
+    recent_changes: Array<{
+      entityName: string;
+      entityType: string;
+      lastModified: string;
+      changeType: 'created' | 'updated';
+    }>;
+    top_important: Array<{
+      entityName: string;
+      entityType: string;
+      importance: number;
+      observationCount: number;
+    }>;
+    most_connected: Array<{
+      entityName: string;
+      entityType: string;
+      relationCount: number;
+      connectedTo: string[];
+    }>;
+    orphaned_entities: Array<{
+      entityName: string;
+      entityType: string;
+      reason: 'no_relations' | 'broken_relation';
+    }>;
+  }> {
+    const graph = await this.loadGraph();
+    
+    // Filter to thread-specific data
+    const threadEntities = graph.entities.filter(e => e.agentThreadId === threadId);
+    const threadRelations = graph.relations.filter(r => r.agentThreadId === threadId);
+    
+    // 1. Recent changes (last 10, sorted by timestamp)
+    const recent_changes = threadEntities
+      .map(e => ({
+        entityName: e.name,
+        entityType: e.entityType,
+        lastModified: e.timestamp,
+        changeType: 'created' as 'created' | 'updated' // Simplified: all are 'created' for now
+      }))
+      .sort((a, b) => b.lastModified.localeCompare(a.lastModified))
+      .slice(0, 10);
+    
+    // 2. Top by importance (top 10)
+    const top_important = threadEntities
+      .map(e => ({
+        entityName: e.name,
+        entityType: e.entityType,
+        importance: e.importance,
+        observationCount: e.observations.length
+      }))
+      .sort((a, b) => b.importance - a.importance)
+      .slice(0, 10);
+    
+    // 3. Most connected entities (top 10 by relation count)
+    const entityRelationCounts = new Map<string, Set<string>>();
+    
+    for (const entity of threadEntities) {
+      entityRelationCounts.set(entity.name, new Set());
+    }
+    
+    for (const relation of threadRelations) {
+      if (entityRelationCounts.has(relation.from)) {
+        entityRelationCounts.get(relation.from)!.add(relation.to);
+      }
+      if (entityRelationCounts.has(relation.to)) {
+        entityRelationCounts.get(relation.to)!.add(relation.from);
+      }
+    }
+    
+    const most_connected = Array.from(entityRelationCounts.entries())
+      .map(([entityName, connectedSet]) => {
+        const entity = threadEntities.find(e => e.name === entityName)!;
+        return {
+          entityName,
+          entityType: entity.entityType,
+          relationCount: connectedSet.size,
+          connectedTo: Array.from(connectedSet)
+        };
+      })
+      .sort((a, b) => b.relationCount - a.relationCount)
+      .slice(0, 10);
+    
+    // 4. Orphaned entities (entities with no relations or broken relations)
+    const orphaned_entities: Array<{
+      entityName: string;
+      entityType: string;
+      reason: 'no_relations' | 'broken_relation';
+    }> = [];
+    
+    const allEntityNames = new Set(threadEntities.map(e => e.name));
+    
+    for (const entity of threadEntities) {
+      const relationCount = entityRelationCounts.get(entity.name)?.size || 0;
+      
+      if (relationCount === 0) {
+        orphaned_entities.push({
+          entityName: entity.name,
+          entityType: entity.entityType,
+          reason: 'no_relations'
+        });
+      } else {
+        // Check for broken relations (pointing to non-existent entities)
+        const entityRelations = threadRelations.filter(r => r.from === entity.name || r.to === entity.name);
+        const hasBrokenRelation = entityRelations.some(r => 
+          !allEntityNames.has(r.from) || !allEntityNames.has(r.to)
+        );
+        
+        if (hasBrokenRelation) {
+          orphaned_entities.push({
+            entityName: entity.name,
+            entityType: entity.entityType,
+            reason: 'broken_relation'
+          });
+        }
+      }
+    }
+    
+    return {
+      recent_changes,
+      top_important,
+      most_connected,
+      orphaned_entities
+    };
+  }
 }
 
