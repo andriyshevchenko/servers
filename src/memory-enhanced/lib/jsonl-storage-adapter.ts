@@ -155,14 +155,20 @@ export class JsonlStorageAdapter implements IStorageAdapter {
       if (!threadMap.has(entity.agentThreadId)) {
         threadMap.set(entity.agentThreadId, { entities: [], relations: [] });
       }
-      threadMap.get(entity.agentThreadId)!.entities.push(entity);
+      const threadData = threadMap.get(entity.agentThreadId);
+      if (threadData) {
+        threadData.entities.push(entity);
+      }
     }
     
     for (const relation of graph.relations) {
       if (!threadMap.has(relation.agentThreadId)) {
         threadMap.set(relation.agentThreadId, { entities: [], relations: [] });
       }
-      threadMap.get(relation.agentThreadId)!.relations.push(relation);
+      const threadData = threadMap.get(relation.agentThreadId);
+      if (threadData) {
+        threadData.relations.push(relation);
+      }
     }
     
     // Save each thread's data to its own file

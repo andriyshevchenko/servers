@@ -68,7 +68,7 @@ export class Neo4jStorageAdapter implements IStorageAdapter {
     //   await session.close();
     // }
     
-    throw new Error('Neo4jStorageAdapter is a skeleton implementation. Install neo4j-driver and implement the methods.');
+    throw new Error('Neo4jStorageAdapter requires neo4j-driver package to be installed and methods to be implemented. See STORAGE.md documentation for setup instructions.');
   }
 
   /**
@@ -96,7 +96,7 @@ export class Neo4jStorageAdapter implements IStorageAdapter {
     //        r.confidence as confidence,
     //        r.importance as importance
     
-    throw new Error('Neo4jStorageAdapter.loadGraph() not implemented');
+    throw new Error('Neo4jStorageAdapter.loadGraph() is not implemented. This is a skeleton - install neo4j-driver and implement the Cypher queries shown in comments above.');
   }
 
   /**
@@ -129,7 +129,7 @@ export class Neo4jStorageAdapter implements IStorageAdapter {
     //     r.confidence = $confidence,
     //     r.importance = $importance
     
-    throw new Error('Neo4jStorageAdapter.saveGraph() not implemented');
+    throw new Error('Neo4jStorageAdapter.saveGraph() is not implemented. This is a skeleton - install neo4j-driver and implement the transactional save logic shown in comments above.');
   }
 
   /**
