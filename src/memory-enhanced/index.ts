@@ -18,9 +18,14 @@ import {
   GetAnalyticsInputSchema,
   GetAnalyticsOutputSchema,
   GetObservationHistoryInputSchema,
-  GetObservationHistoryOutputSchema
+  GetObservationHistoryOutputSchema,
+  ListEntitiesInputSchema,
+  ListEntitiesOutputSchema,
+  ValidateMemoryInputSchema,
+  ValidateMemoryOutputSchema
 } from './lib/schemas.js';
 import { handleSaveMemory } from './lib/save-memory-handler.js';
+import { validateSaveMemoryRequest } from './lib/validation.js';
 import { IStorageAdapter } from './lib/storage-interface.js';
 import { JsonlStorageAdapter } from './lib/jsonl-storage-adapter.js';
 import { Neo4jStorageAdapter } from './lib/neo4j-storage-adapter.js';
@@ -145,7 +150,7 @@ server.registerTool(
   "save_memory",
   {
     title: "Save Memory",
-    description: "Save entities and their relations to memory graph atomically. RULES: 1) Each observation max 150 chars (atomic facts only). 2) Each entity MUST have at least 1 relation. This is the recommended way to create entities and relations.",
+    description: "Save entities and their relations to memory graph atomically. RULES: 1) Each observation max 300 chars (atomic facts, technical content supported). 2) Each entity MUST have at least 1 relation. This is the recommended way to create entities and relations.",
     inputSchema: SaveMemoryInputSchema,
     outputSchema: SaveMemoryOutputSchema
   },
@@ -153,24 +158,60 @@ server.registerTool(
     const result = await handleSaveMemory(
       input as SaveMemoryInput,
       (entities) => knowledgeGraphManager.createEntities(entities),
-      (relations) => knowledgeGraphManager.createRelations(relations)
+      (relations) => knowledgeGraphManager.createRelations(relations),
+      (threadId) => knowledgeGraphManager.getEntityNamesInThread(threadId)
     );
     
     if (result.success) {
+      // Build success message with entity names
+      let successText = `✓ Successfully saved ${result.created.entities} entities and ${result.created.relations} relations.\n` +
+                        `Quality score: ${(result.quality_score * 100).toFixed(1)}%\n`;
+      
+      if (result.created.entity_names && result.created.entity_names.length > 0) {
+        successText += `\nCreated entities: ${result.created.entity_names.join(', ')}\n`;
+      }
+      
+      if (result.warnings.length > 0) {
+        successText += `\nWarnings:\n${result.warnings.join('\n')}`;
+      }
+      
       return {
         content: [{ 
           type: "text" as const, 
-          text: `✓ Successfully saved ${result.created.entities} entities and ${result.created.relations} relations.\n` +
-                `Quality score: ${(result.quality_score * 100).toFixed(1)}%\n` +
-                (result.warnings.length > 0 ? `\nWarnings:\n${result.warnings.join('\n')}` : '')
+          text: successText
         }],
         structuredContent: result as any
       };
     } else {
+      // Format validation errors for display
+      let errorText = '✗ Validation failed:\n\n';
+      
+      if (result.validation_errors) {
+        if (Array.isArray(result.validation_errors) && result.validation_errors.length > 0) {
+          // Check if structured errors
+          if (typeof result.validation_errors[0] === 'object') {
+            const structuredErrors = result.validation_errors as any[];
+            errorText += structuredErrors.map(err => {
+              let msg = `Entity #${err.entity_index} "${err.entity_name}" (${err.entity_type}):\n`;
+              err.errors.forEach((e: string) => msg += `  - ${e}\n`);
+              if (err.observations && err.observations.length > 0) {
+                msg += `  Observations: ${err.observations.join(', ')}\n`;
+              }
+              return msg;
+            }).join('\n');
+          } else {
+            // Fallback to string errors
+            errorText += result.validation_errors.join('\n');
+          }
+        }
+      }
+      
+      errorText += '\nFix all validation errors and retry. All entities must be valid to maintain memory integrity.';
+      
       return {
         content: [{ 
           type: "text" as const, 
-          text: `✗ Validation failed:\n${result.validation_errors?.join('\n')}` 
+          text: errorText
         }],
         structuredContent: result as any,
         isError: true
@@ -417,6 +458,168 @@ server.registerTool(
     return {
       content: [{ type: "text" as const, text: JSON.stringify(graph, null, 2) }],
       structuredContent: { ...graph }
+    };
+  }
+);
+
+// Register list_entities tool for simple entity lookup
+server.registerTool(
+  "list_entities",
+  {
+    title: "List Entities",
+    description: "List entities with optional filtering by entity type and name pattern. Returns a simple list of entity names and types for quick discovery.",
+    inputSchema: ListEntitiesInputSchema,
+    outputSchema: ListEntitiesOutputSchema
+  },
+  async (input: any) => {
+    const { threadId, entityType, namePattern } = input;
+    const entities = await knowledgeGraphManager.listEntities(threadId, entityType, namePattern);
+    return {
+      content: [{ 
+        type: "text" as const, 
+        text: `Found ${entities.length} entities:\n` + 
+              entities.map(e => `  - ${e.name} (${e.entityType})`).join('\n')
+      }],
+      structuredContent: { entities }
+    };
+  }
+);
+
+// Register validate_memory tool for pre-validation (dry-run)
+server.registerTool(
+  "validate_memory",
+  {
+    title: "Validate Memory",
+    description: "Validate entities without saving (dry-run). Check for errors before attempting save_memory. Returns detailed validation results per entity.",
+    inputSchema: ValidateMemoryInputSchema,
+    outputSchema: ValidateMemoryOutputSchema
+  },
+  async (input: any) => {
+    const { entities, threadId } = input;
+    
+    // Get existing entity names for cross-thread reference validation
+    let existingEntityNames: Set<string> | undefined;
+    try {
+      existingEntityNames = await knowledgeGraphManager.getEntityNamesInThread(threadId);
+    } catch (error) {
+      // If we can't get existing entities, proceed without cross-thread validation
+    }
+    
+    // Preserve original entityType values before validation normalizes them
+    // This is needed to match warnings to the correct entities
+    const originalEntityTypes = entities.map((e: any) => e.entityType);
+    
+    // Run validation (same logic as save_memory but without saving)
+    const validationResult = validateSaveMemoryRequest(entities, existingEntityNames);
+    
+    // Transform validation result into per-entity format
+    const results = new Map<number, {
+      index: number;
+      name: string;
+      type: string;
+      valid: boolean;
+      errors: string[];
+      warnings: string[];
+    }>();
+    
+    // Initialize all entities as valid
+    entities.forEach((entity: any, index: number) => {
+      results.set(index, {
+        index: index,
+        name: entity.name,
+        type: originalEntityTypes[index],  // Use original type, not normalized
+        valid: true,
+        errors: [],
+        warnings: []
+      });
+    });
+    
+    // Add errors to corresponding entities
+    validationResult.errors.forEach((err: any) => {
+      const result = results.get(err.entityIndex);
+      if (result) {
+        result.valid = false;
+        const errorMsg = err.suggestion 
+          ? `${err.error} Suggestion: ${err.suggestion}` 
+          : err.error;
+        result.errors.push(errorMsg);
+      }
+    });
+    
+    // Add warnings to corresponding entities
+    validationResult.warnings.forEach((warning: string) => {
+      // Parse entity type from warning if possible, otherwise add to first entity
+      const entityMatch = warning.match(/EntityType '([^']+)'/);
+      if (entityMatch) {
+        const warningEntityType = entityMatch[1];
+        let attached = false;
+        
+        // Find entity whose ORIGINAL entityType matches the type in the warning
+        // (warnings contain the original type before normalization)
+        originalEntityTypes.forEach((origType: string, index: number) => {
+          if (origType === warningEntityType) {
+            const result = results.get(index);
+            if (result) {
+              result.warnings.push(warning);
+              attached = true;
+            }
+          }
+        });
+        
+        // If no matching entity type found, attach to first entity as fallback
+        if (!attached) {
+          const firstResult = results.get(0);
+          if (firstResult) {
+            firstResult.warnings.push(warning);
+          }
+        }
+      } else {
+        // No entity type information in warning; attach to first entity
+        const firstResult = results.get(0);
+        if (firstResult) {
+          firstResult.warnings.push(warning);
+        }
+      }
+    });
+    
+    const resultArray = Array.from(results.values());
+    const allValid = resultArray.every(r => r.valid);
+    
+    // Format response text
+    let responseText = allValid 
+      ? `✓ All ${entities.length} entities are valid and ready to save.\n`
+      : `✗ Validation failed for ${resultArray.filter(r => !r.valid).length} of ${entities.length} entities:\n\n`;
+    
+    if (!allValid) {
+      resultArray.filter(r => !r.valid).forEach(r => {
+        responseText += `Entity #${r.index} "${r.name}" (${r.type}):\n`;
+        r.errors.forEach(e => responseText += `  - ${e}\n`);
+        if (r.warnings.length > 0) {
+          r.warnings.forEach(w => responseText += `  ⚠ ${w}\n`);
+        }
+        responseText += '\n';
+      });
+    }
+    
+    // Add warnings for valid entities if any
+    const validWithWarnings = resultArray.filter(r => r.valid && r.warnings.length > 0);
+    if (validWithWarnings.length > 0) {
+      responseText += 'Warnings:\n';
+      validWithWarnings.forEach(r => {
+        responseText += `Entity #${r.index} "${r.name}" (${r.type}):\n`;
+        r.warnings.forEach(w => responseText += `  ⚠ ${w}\n`);
+      });
+    }
+    
+    return {
+      content: [{ 
+        type: "text" as const, 
+        text: responseText
+      }],
+      structuredContent: {
+        all_valid: allValid,
+        results: resultArray
+      }
     };
   }
 );

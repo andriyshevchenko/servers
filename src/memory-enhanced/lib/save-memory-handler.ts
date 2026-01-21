@@ -15,23 +15,71 @@ import { randomUUID } from 'crypto';
 export async function handleSaveMemory(
   input: SaveMemoryInput,
   createEntitiesFn: (entities: Entity[]) => Promise<Entity[]>,
-  createRelationsFn: (relations: Relation[]) => Promise<Relation[]>
+  createRelationsFn: (relations: Relation[]) => Promise<Relation[]>,
+  getExistingEntityNamesFn?: (threadId: string) => Promise<Set<string>>
 ): Promise<SaveMemoryOutput> {
   const timestamp = new Date().toISOString();
   
-  // Validate the entire request
-  const validationResult = validateSaveMemoryRequest(input.entities);
+  // Get existing entity names for cross-thread reference validation
+  let existingEntityNames: Set<string> | undefined;
+  if (getExistingEntityNamesFn) {
+    try {
+      existingEntityNames = await getExistingEntityNamesFn(input.threadId);
+    } catch (error) {
+      // If we can't get existing entities, proceed without cross-thread validation
+      console.warn(`Failed to get existing entities for thread ${input.threadId}:`, error);
+    }
+  }
+  
+  // Validate the entire request (with cross-thread entity reference support)
+  const validationResult = validateSaveMemoryRequest(input.entities, existingEntityNames);
   
   if (!validationResult.valid) {
-    // Return validation errors
+    // Group errors by entity for better structure
+    const errorsByEntity: Map<number, {
+      entity_name: string;
+      entity_type: string;
+      errors: string[];
+      observations: string[];
+    }> = new Map();
+    
+    for (const err of validationResult.errors) {
+      if (!errorsByEntity.has(err.entityIndex)) {
+        errorsByEntity.set(err.entityIndex, {
+          entity_name: err.entity,
+          entity_type: err.entityType,
+          errors: [],
+          observations: []
+        });
+      }
+      
+      const entityErrors = errorsByEntity.get(err.entityIndex)!;
+      const errorMsg = err.suggestion 
+        ? `${err.error} Suggestion: ${err.suggestion}` 
+        : err.error;
+      entityErrors.errors.push(errorMsg);
+      
+      if (err.observationPreview) {
+        entityErrors.observations.push(err.observationPreview);
+      }
+    }
+    
+    // Convert to structured format
+    const structuredErrors = Array.from(errorsByEntity.entries()).map(([index, data]) => ({
+      entity_index: index,
+      entity_name: data.entity_name,
+      entity_type: data.entity_type,
+      errors: data.errors,
+      observations: data.observations.length > 0 ? data.observations : undefined
+    }));
+    
+    // Return validation errors with detailed structure
     return {
       success: false,
       created: { entities: 0, relations: 0 },
       warnings: [],
       quality_score: 0,
-      validation_errors: validationResult.errors.map(err => 
-        `${err.entity}: ${err.error}${err.suggestion ? ` Suggestion: ${err.suggestion}` : ''}`
-      )
+      validation_errors: structuredErrors
     };
   }
   
@@ -96,11 +144,15 @@ export async function handleSaveMemory(
     // Calculate quality score
     const qualityScore = calculateQualityScore(input.entities);
     
+    // Extract entity names for reference in subsequent calls
+    const entityNames = createdEntities.map(e => e.name);
+    
     return {
       success: true,
       created: {
         entities: createdEntities.length,
-        relations: createdRelations.length
+        relations: createdRelations.length,
+        entity_names: entityNames
       },
       warnings: validationResult.warnings,
       quality_score: qualityScore

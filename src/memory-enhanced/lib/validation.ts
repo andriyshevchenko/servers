@@ -14,26 +14,43 @@ import {
 } from './constants.js';
 
 /**
- * Counts actual sentences in text, ignoring periods in version numbers and decimals
+ * Counts actual sentences in text, ignoring periods in technical content
  * @param text The text to analyze
  * @returns Number of actual sentences
  */
 function countSentences(text: string): number {
-  // Remove version numbers (e.g., 1.2.0, v5.4.3, V2.1.0) and decimal numbers before counting
-  // This prevents false positives where technical data is incorrectly counted as sentences
-  // Using explicit case handling [vV] for version prefix
-  const cleaned = text
-    .replace(/\b[vV]?\d+\.\d+(\.\d+)*\b/g, 'VERSION'); // handles version numbers and decimals
+  // Patterns to ignore - technical content that contains periods but aren't sentence boundaries
+  // NOTE: Order matters! More specific patterns (multi-letter abbreviations) must come before more general patterns
+  const patternsToIgnore = [
+    /https?:\/\/[^\s]+/g,                                                      // URLs (http:// or https://) - allows periods in paths
+    /\b\d+\.\d+\.\d+\.\d+\b/g,                                                 // IP addresses (e.g., 192.168.1.1)
+    /\b[A-Za-z]:[\\\/](?:[^\s<>:"|?*]+(?:\s+[^\s<>:"|?*]+)*)/g,               // Windows/Unix paths (handles spaces, e.g., C:\Program Files\...)
+    /\b[vV]?\d+\.\d+(\.\d+)*\b/g,                                              // Version numbers (e.g., v1.2.0, 5.4.3)
+    /\b(?:[A-Z]\.){2,}/g,                                                      // Multi-letter abbreviations (e.g., U.S., U.K., U.S.A., P.D.F., I.B.M., etc.) - must come before single-letter pattern
+    /\b[A-Z][a-z]{0,3}\./g,                                                    // Common single-letter abbreviations (e.g., Dr., Mr., Mrs., Ms., Jr., Sr., etc.)
+    /\b[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?){2,}\b/g,  // Hostnames/domains with at least 2 dots (e.g., sub.domain.com) - must come after all abbreviation patterns
+  ];
   
-  // Split on actual sentence terminators
+  // Replace technical patterns with placeholders to prevent false sentence detection
+  let cleaned = text;
+  for (const pattern of patternsToIgnore) {
+    cleaned = cleaned.replace(pattern, 'PLACEHOLDER');
+  }
+  
+  // Split on actual sentence terminators and count non-empty sentences
   const sentences = cleaned.split(SENTENCE_TERMINATORS).filter(s => s.trim().length > 0);
   return sentences.length;
 }
 
 /**
+ * Maximum length for observation preview in error messages
+ */
+const OBSERVATION_PREVIEW_LENGTH = 50;
+
+/**
  * Validates a single observation according to spec requirements:
  * - Min 5 characters
- * - Max 150 characters
+ * - Max 300 characters (increased to accommodate technical content)
  * - Max 3 sentences (ignoring periods in version numbers and decimals)
  */
 export function validateObservation(obs: string): ValidationResult {
@@ -49,7 +66,7 @@ export function validateObservation(obs: string): ValidationResult {
     return {
       valid: false,
       error: `Observation too long (${obs.length} chars). Max ${MAX_OBSERVATION_LENGTH}.`,
-      suggestion: `Split into multiple observations.`
+      suggestion: `Split into atomic facts.`
     };
   }
   
@@ -81,18 +98,25 @@ export function validateEntityRelations(entity: SaveMemoryEntity): ValidationRes
 }
 
 /**
- * Validates that relation targets exist in the same request
+ * Validates that relation targets exist in the same request or in existing entities
+ * @param entity The entity whose relations to validate
+ * @param allEntityNames Set of entity names in the current request
+ * @param existingEntityNames Optional set of entity names that already exist in storage (for cross-thread references)
  */
 export function validateRelationTargets(
   entity: SaveMemoryEntity, 
-  allEntityNames: Set<string>
+  allEntityNames: Set<string>,
+  existingEntityNames?: Set<string>
 ): ValidationResult {
   for (const relation of entity.relations) {
-    if (!allEntityNames.has(relation.targetEntity)) {
+    const targetInCurrentBatch = allEntityNames.has(relation.targetEntity);
+    const targetInExisting = existingEntityNames?.has(relation.targetEntity) ?? false;
+    
+    if (!targetInCurrentBatch && !targetInExisting) {
       return {
         valid: false,
-        error: `Target entity '${relation.targetEntity}' not found in request`,
-        suggestion: `targetEntity must reference another entity in the same save_memory call`
+        error: `Target entity '${relation.targetEntity}' not found in request or existing entities`,
+        suggestion: `targetEntity must reference another entity in the same save_memory call or an existing entity`
       };
     }
   }
@@ -132,23 +156,47 @@ export function normalizeEntityType(entityType: string): { normalized: string; w
  */
 export interface SaveMemoryValidationResult {
   valid: boolean;
-  errors: Array<{ entity: string; error: string; suggestion?: string }>;
+  errors: Array<{ 
+    entity: string; 
+    entityIndex: number;
+    entityType: string;
+    error: string; 
+    suggestion?: string;
+    observationPreview?: string; // First 50 chars of problematic observation
+  }>;
   warnings: string[];
 }
 
+/**
+ * Validates all aspects of a save_memory request
+ * @param entities The entities to validate
+ * @param existingEntityNames Optional set of entity names that already exist in storage (for cross-thread references)
+ */
 export function validateSaveMemoryRequest(
-  entities: SaveMemoryEntity[]
+  entities: SaveMemoryEntity[],
+  existingEntityNames?: Set<string>
 ): SaveMemoryValidationResult {
-  const errors: Array<{ entity: string; error: string; suggestion?: string }> = [];
+  const errors: Array<{ 
+    entity: string; 
+    entityIndex: number;
+    entityType: string;
+    error: string; 
+    suggestion?: string;
+    observationPreview?: string;
+  }> = [];
   const warnings: string[] = [];
   
   // Collect all entity names for relation validation
   const entityNames = new Set(entities.map(e => e.name));
   
-  for (const entity of entities) {
+  for (let entityIndex = 0; entityIndex < entities.length; entityIndex++) {
+    const entity = entities[entityIndex];
+    
     // Validate entity type and collect warnings
+    // Note: entityType is normalized in-place for consistency with existing behavior
+    // The normalized value is used throughout the rest of validation and saving
     const { normalized, warnings: typeWarnings } = normalizeEntityType(entity.entityType);
-    entity.entityType = normalized; // Apply normalization
+    entity.entityType = normalized; // Apply normalization (intentional mutation for consistency)
     warnings.push(...typeWarnings);
     
     // Validate observations (note: observations are still strings in SaveMemoryEntity input)
@@ -157,8 +205,12 @@ export function validateSaveMemoryRequest(
       if (!obsResult.valid) {
         errors.push({
           entity: entity.name,
+          entityIndex: entityIndex,
+          entityType: entity.entityType,
           error: `Observation ${i + 1}: ${obsResult.error}`,
-          suggestion: obsResult.suggestion
+          suggestion: obsResult.suggestion,
+          observationPreview: entity.observations[i].substring(0, OBSERVATION_PREVIEW_LENGTH) + 
+                             (entity.observations[i].length > OBSERVATION_PREVIEW_LENGTH ? '...' : '')
         });
       }
     }
@@ -168,16 +220,20 @@ export function validateSaveMemoryRequest(
     if (!relResult.valid) {
       errors.push({
         entity: entity.name,
+        entityIndex: entityIndex,
+        entityType: entity.entityType,
         error: relResult.error || 'Invalid relations',
         suggestion: relResult.suggestion
       });
     }
     
-    // Validate relation targets
-    const targetResult = validateRelationTargets(entity, entityNames);
+    // Validate relation targets (now supports cross-thread references)
+    const targetResult = validateRelationTargets(entity, entityNames, existingEntityNames);
     if (!targetResult.valid) {
       errors.push({
         entity: entity.name,
+        entityIndex: entityIndex,
+        entityType: entity.entityType,
         error: targetResult.error || 'Invalid relation target',
         suggestion: targetResult.suggestion
       });

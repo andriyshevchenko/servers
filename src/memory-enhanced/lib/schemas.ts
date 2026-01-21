@@ -51,8 +51,8 @@ export const SaveMemoryEntitySchema = z.object({
     "Type of entity (e.g., Person, Document, File, or custom types like Patient, API). Convention: start with capital letter."
   ),
   observations: z.array(
-    z.string().min(5).max(150).describe("Atomic fact, max 150 chars")
-  ).min(1).describe("Array of atomic facts. Each must be ONE fact, max 150 chars."),
+    z.string().min(5).max(300).describe("Atomic fact, max 300 chars (increased to accommodate technical content)")
+  ).min(1).describe("Array of atomic facts. Each must be ONE fact, max 300 chars."),
   relations: z.array(SaveMemoryRelationSchema)
     .min(1)
     .describe("REQUIRED: Every entity must have at least 1 relation"),
@@ -69,7 +69,8 @@ export const SaveMemoryOutputSchema = z.object({
   success: z.boolean(),
   created: z.object({
     entities: z.number(),
-    relations: z.number()
+    relations: z.number(),
+    entity_names: z.array(z.string()).optional().describe("Names of created entities (for reference in subsequent calls)")
   }),
   warnings: z.array(z.string()),
   quality_score: z.number().min(0).max(1),
@@ -115,4 +116,36 @@ export const GetObservationHistoryInputSchema = z.object({
 
 export const GetObservationHistoryOutputSchema = z.object({
   history: z.array(ObservationSchema).describe("Full version chain of the observation, chronologically ordered")
+});
+
+// Schema for list_entities tool (Simple Entity Lookup)
+export const ListEntitiesInputSchema = z.object({
+  threadId: z.string().optional().describe("Filter by thread ID (optional - returns entities from all threads if not specified)"),
+  entityType: z.string().optional().describe("Filter by entity type (e.g., 'Person', 'Service', 'Document')"),
+  namePattern: z.string().optional().describe("Filter by name pattern (case-insensitive substring match)")
+});
+
+export const ListEntitiesOutputSchema = z.object({
+  entities: z.array(z.object({
+    name: z.string(),
+    entityType: z.string()
+  })).describe("List of entities matching the filters")
+});
+
+// Schema for validate_memory tool (Pre-Validation)
+export const ValidateMemoryInputSchema = z.object({
+  entities: z.array(SaveMemoryEntitySchema).min(1).describe("Array of entities to validate"),
+  threadId: z.string().min(1).describe("Thread ID for this conversation/project")
+});
+
+export const ValidateMemoryOutputSchema = z.object({
+  all_valid: z.boolean().describe("True if all entities pass validation"),
+  results: z.array(z.object({
+    index: z.number().describe("Entity index in the input array"),
+    name: z.string().describe("Entity name"),
+    type: z.string().describe("Entity type"),
+    valid: z.boolean().describe("True if this entity passes validation"),
+    errors: z.array(z.string()).describe("List of validation errors"),
+    warnings: z.array(z.string()).describe("List of validation warnings")
+  })).describe("Validation results for each entity")
 });

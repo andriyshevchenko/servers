@@ -61,15 +61,24 @@ export interface SaveMemoryInput {
   threadId: string;
 }
 
+export interface DetailedValidationError {
+  entity_index: number;
+  entity_name: string;
+  entity_type: string;
+  errors: string[];
+  observations?: string[]; // Preview of observation content for context
+}
+
 export interface SaveMemoryOutput {
   success: boolean;
   created: {
     entities: number;
     relations: number;
+    entity_names?: string[]; // Names of created entities (for reference in subsequent calls)
   };
   warnings: string[];
   quality_score: number;
-  validation_errors?: string[];
+  validation_errors?: string[] | DetailedValidationError[]; // Support both formats for backward compatibility
 }
 
 export interface ValidationResult {

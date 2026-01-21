@@ -16,11 +16,24 @@ describe('Observation Validation', () => {
   });
 
   it('should reject observations over 150 characters', () => {
-    const longObs = 'a'.repeat(151);
+    const longObs = 'a'.repeat(301);
     const result = validateObservation(longObs);
     expect(result.valid).toBe(false);
     expect(result.error).toContain('too long');
-    expect(result.error).toContain('151 chars');
+    expect(result.error).toContain('301 chars');
+  });
+
+  it('should accept observations up to 300 characters', () => {
+    const maxLengthObs = 'a'.repeat(300);
+    const result = validateObservation(maxLengthObs);
+    expect(result.valid).toBe(true);
+  });
+
+  it('should accept technical observations with URLs within 300 chars', () => {
+    const technicalObs = 'API endpoint at https://api-gateway.production.company.com/v2/services/authentication handles OAuth2 with JWT tokens, 30s timeout, rate limit 1000/min';
+    expect(technicalObs.length).toBeLessThanOrEqual(300);
+    const result = validateObservation(technicalObs);
+    expect(result.valid).toBe(true);
   });
 
   it('should reject observations with more than 3 sentences', () => {
@@ -89,6 +102,100 @@ describe('Observation Validation', () => {
     expect(result.valid).toBe(false);
     expect(result.error).toContain('Too many sentences');
   });
+
+  // Tests for smarter sentence detection (technical content)
+  it('should accept URLs without counting colons/periods as sentence boundaries', () => {
+    const result = validateObservation('URL: https://dvdat-uks-01-es.develastic.nidemo.com/');
+    expect(result.valid).toBe(true);
+  });
+
+  it('should accept HTTP URLs', () => {
+    const result = validateObservation('Service endpoint is http://api.example.com/v1/data');
+    expect(result.valid).toBe(true);
+  });
+
+  it('should handle URLs with trailing punctuation correctly', () => {
+    const result = validateObservation('Visit https://example.com. Documentation available. Support provided.');
+    expect(result.valid).toBe(true); // 3 sentences
+  });
+
+  it('should accept observations with hostnames', () => {
+    const result = validateObservation('Connected to ni-internal-dev.servicebus.windows.net successfully');
+    expect(result.valid).toBe(true);
+  });
+
+  it('should accept observations with IP addresses', () => {
+    const result1 = validateObservation('Server IP is 192.168.1.1 for local access');
+    expect(result1.valid).toBe(true);
+
+    const result2 = validateObservation('Connected to 10.0.0.5 on port 8080');
+    expect(result2.valid).toBe(true);
+  });
+
+  it('should accept observations with Windows file paths', () => {
+    const result = validateObservation('Config file located at C:\\Program Files\\App\\config.json');
+    expect(result.valid).toBe(true);
+  });
+
+  it('should accept Windows paths with spaces correctly', () => {
+    const result = validateObservation('Log file at C:\\Program Files\\Application\\logs\\app.log contains errors');
+    expect(result.valid).toBe(true);
+  });
+
+  it('should accept URLs with file extensions like .html', () => {
+    const result = validateObservation('Documentation at https://example.com/docs/guide.html is comprehensive');
+    expect(result.valid).toBe(true);
+  });
+
+  it('should accept URLs with multiple path segments and extensions', () => {
+    const result = validateObservation('Download from https://cdn.example.com/files/v2/installer.exe for setup');
+    expect(result.valid).toBe(true);
+  });
+
+  it('should not match short abbreviations as hostnames', () => {
+    // Dr. and U.S. should not be matched as hostnames due to minimum dot requirement
+    const result = validateObservation('Dr. Smith met with U.S. representatives. Discussion was productive.');
+    expect(result.valid).toBe(true); // 2 sentences
+  });
+
+  it('should handle three or more letter abbreviations', () => {
+    // U.S.A., P.D.F., I.B.M. should not be treated as sentence boundaries
+    const result = validateObservation('Files in U.S.A. use P.D.F. format. I.B.M. systems comply.');
+    expect(result.valid).toBe(true); // 2 sentences
+  });
+
+  it('should accept observations with multiple technical elements', () => {
+    const result = validateObservation('API v2.0 at https://api.example.com uses 192.168.1.100');
+    expect(result.valid).toBe(true);
+  });
+
+  it('should still correctly count actual sentences with URLs', () => {
+    const result = validateObservation('Visit https://example.com for details. Documentation is available. Support is provided.');
+    expect(result.valid).toBe(true); // 3 sentences, at the limit
+  });
+
+  it('should reject when there are too many actual sentences with URLs', () => {
+    const result = validateObservation('Visit https://example.com for details. Documentation is available. Support is provided. Testing complete.');
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('Too many sentences');
+  });
+
+  it('should handle mixed technical content and sentences', () => {
+    const result = validateObservation('Server at 10.0.0.1 hosts v2.1.0. Access via https://api.server.com. Ready for use.');
+    expect(result.valid).toBe(true); // 3 sentences
+  });
+
+  // Test to ensure patterns don't create false positives
+  it('should correctly count sentences that have words ending in periods', () => {
+    const result = validateObservation('The cat. The dog. The bird. The fish.');
+    expect(result.valid).toBe(false); // 4 sentences - should reject
+    expect(result.error).toContain('Too many sentences');
+  });
+
+  it('should accept regular sentences without technical content', () => {
+    const result = validateObservation('This is a regular sentence. Another normal sentence. Third sentence here.');
+    expect(result.valid).toBe(true); // 3 sentences, at the limit
+  });
 });
 
 describe('Entity Relations Validation', () => {
@@ -117,7 +224,7 @@ describe('Entity Relations Validation', () => {
 });
 
 describe('Relation Target Validation', () => {
-  it('should pass when all target entities exist', () => {
+  it('should pass when all target entities exist in current batch', () => {
     const entity: SaveMemoryEntity = {
       name: 'Entity1',
       entityType: 'Test',
@@ -131,7 +238,7 @@ describe('Relation Target Validation', () => {
     expect(result.valid).toBe(true);
   });
 
-  it('should reject when target entity does not exist', () => {
+  it('should reject when target entity does not exist in batch or existing entities', () => {
     const entity: SaveMemoryEntity = {
       name: 'Entity1',
       entityType: 'Test',
@@ -143,7 +250,38 @@ describe('Relation Target Validation', () => {
     const entityNames = new Set(['Entity1', 'Entity2']);
     const result = validateRelationTargets(entity, entityNames);
     expect(result.valid).toBe(false);
-    expect(result.error).toContain('not found in request');
+    expect(result.error).toContain('not found in request or existing entities');
+  });
+
+  it('should pass when target entity exists in existing entities (cross-thread reference)', () => {
+    const entity: SaveMemoryEntity = {
+      name: 'Entity1',
+      entityType: 'Test',
+      observations: ['Test'],
+      relations: [
+        { targetEntity: 'ExistingEntity', relationType: 'relates to' }
+      ]
+    };
+    const entityNames = new Set(['Entity1']);
+    const existingEntityNames = new Set(['ExistingEntity', 'AnotherEntity']);
+    const result = validateRelationTargets(entity, entityNames, existingEntityNames);
+    expect(result.valid).toBe(true);
+  });
+
+  it('should pass when some targets are in batch and some in existing entities', () => {
+    const entity: SaveMemoryEntity = {
+      name: 'Entity1',
+      entityType: 'Test',
+      observations: ['Test'],
+      relations: [
+        { targetEntity: 'Entity2', relationType: 'relates to' },
+        { targetEntity: 'ExistingEntity', relationType: 'depends on' }
+      ]
+    };
+    const entityNames = new Set(['Entity1', 'Entity2']);
+    const existingEntityNames = new Set(['ExistingEntity']);
+    const result = validateRelationTargets(entity, entityNames, existingEntityNames);
+    expect(result.valid).toBe(true);
   });
 });
 
@@ -201,7 +339,7 @@ describe('Save Memory Request Validation', () => {
       {
         name: 'Entity1',
         entityType: 'person',
-        observations: ['a'.repeat(151)], // Too long
+        observations: ['a'.repeat(301)], // Too long
         relations: [] // No relations
       }
     ];
