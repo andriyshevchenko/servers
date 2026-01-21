@@ -21,6 +21,10 @@ import {
   GetObservationHistoryOutputSchema
 } from './lib/schemas.js';
 import { handleSaveMemory } from './lib/save-memory-handler.js';
+import { IStorageAdapter } from './lib/storage-interface.js';
+import { JsonlStorageAdapter } from './lib/jsonl-storage-adapter.js';
+import { Neo4jStorageAdapter } from './lib/neo4j-storage-adapter.js';
+import { NEO4J_ENV_VARS, STORAGE_LOG_MESSAGES, NEO4J_ERROR_MESSAGES } from './lib/storage-config.js';
 
 // Define memory directory path using environment variable with fallback
 export const defaultMemoryDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory-data');
@@ -40,6 +44,77 @@ export async function ensureMemoryDirectory(): Promise<string> {
   }
   
   return memoryDir;
+}
+
+/**
+ * Get Neo4j configuration from environment variables.
+ * Extracted for testability and Single Responsibility Principle.
+ */
+function getNeo4jConfig(): { uri: string; username: string; password: string; database?: string } | null {
+  const uri = process.env[NEO4J_ENV_VARS.URI];
+  const username = process.env[NEO4J_ENV_VARS.USERNAME];
+  const password = process.env[NEO4J_ENV_VARS.PASSWORD];
+  const database = process.env[NEO4J_ENV_VARS.DATABASE];
+
+  if (!uri || !username || !password) {
+    return null;
+  }
+
+  return { uri, username, password, database };
+}
+
+/**
+ * Create Neo4j storage adapter if configured.
+ * Extracted for Single Responsibility Principle and testability.
+ */
+async function createNeo4jAdapter(config: { uri: string; username: string; password: string; database?: string }): Promise<IStorageAdapter | null> {
+  try {
+    console.error(STORAGE_LOG_MESSAGES.ATTEMPTING_NEO4J, config.uri);
+    const neo4jAdapter = new Neo4jStorageAdapter(config);
+    await neo4jAdapter.initialize();
+    console.error(STORAGE_LOG_MESSAGES.NEO4J_SUCCESS);
+    return neo4jAdapter;
+  } catch (error) {
+    // Sanitize error message to avoid exposing credentials
+    const safeErrorMessage = error instanceof Error ? error.message.replace(/password[=:][\S]+/gi, 'password:***') : 'Connection failed';
+    console.error(STORAGE_LOG_MESSAGES.NEO4J_FALLBACK, safeErrorMessage);
+    return null;
+  }
+}
+
+/**
+ * Create JSONL storage adapter.
+ * Extracted for DRY and testability.
+ */
+async function createJsonlAdapter(memoryDirPath: string): Promise<IStorageAdapter> {
+  const jsonlAdapter = new JsonlStorageAdapter(memoryDirPath);
+  await jsonlAdapter.initialize();
+  console.error(STORAGE_LOG_MESSAGES.USING_JSONL, memoryDirPath);
+  return jsonlAdapter;
+}
+
+/**
+ * Create storage adapter based on environment variables.
+ * Falls back to JSONL storage if Neo4j is not configured or connection fails.
+ * 
+ * Follows Open/Closed Principle: Open for extension (add new storage types)
+ * without modifying existing code.
+ */
+async function createStorageAdapter(memoryDirPath: string): Promise<IStorageAdapter> {
+  // Try Neo4j if configured
+  const neo4jConfig = getNeo4jConfig();
+  
+  if (neo4jConfig) {
+    const neo4jAdapter = await createNeo4jAdapter(neo4jConfig);
+    if (neo4jAdapter) {
+      return neo4jAdapter;
+    }
+  } else {
+    console.error(NEO4J_ERROR_MESSAGES.NOT_CONFIGURED);
+  }
+
+  // Fall back to JSONL storage
+  return createJsonlAdapter(memoryDirPath);
 }
 
 // Initialize memory directory path (will be set during startup)
@@ -639,8 +714,40 @@ async function main() {
   // Initialize memory directory path
   MEMORY_DIR_PATH = await ensureMemoryDirectory();
 
-  // Initialize knowledge graph manager with the memory directory path
-  knowledgeGraphManager = new KnowledgeGraphManager(MEMORY_DIR_PATH);
+  // Create storage adapter based on environment variables
+  // Falls back to JSONL if Neo4j is not configured or connection fails
+  const storageAdapter = await createStorageAdapter(MEMORY_DIR_PATH);
+
+  // Initialize knowledge graph manager with the storage adapter
+  knowledgeGraphManager = new KnowledgeGraphManager(MEMORY_DIR_PATH, storageAdapter);
+
+  // Register graceful shutdown handlers to ensure storage adapter is closed
+  let isShuttingDown = false;
+  const shutdown = async (signal: NodeJS.Signals) => {
+    if (isShuttingDown) {
+      return;
+    }
+    isShuttingDown = true;
+    console.error(`Received ${signal}, shutting down gracefully...`);
+    try {
+      // Close storage adapter (including Neo4j connections) before exiting
+      if (storageAdapter && 'close' in storageAdapter && typeof storageAdapter.close === 'function') {
+        await storageAdapter.close();
+      }
+    } catch (err) {
+      console.error("Error during storage adapter shutdown:", err);
+    } finally {
+      process.exit(0);
+    }
+  };
+
+  process.on("SIGINT", () => {
+    void shutdown("SIGINT");
+  });
+
+  process.on("SIGTERM", () => {
+    void shutdown("SIGTERM");
+  });
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
