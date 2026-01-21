@@ -18,7 +18,9 @@ import {
   GetAnalyticsInputSchema,
   GetAnalyticsOutputSchema,
   GetObservationHistoryInputSchema,
-  GetObservationHistoryOutputSchema
+  GetObservationHistoryOutputSchema,
+  ListEntitiesInputSchema,
+  ListEntitiesOutputSchema
 } from './lib/schemas.js';
 import { handleSaveMemory } from './lib/save-memory-handler.js';
 import { IStorageAdapter } from './lib/storage-interface.js';
@@ -418,6 +420,29 @@ server.registerTool(
     return {
       content: [{ type: "text" as const, text: JSON.stringify(graph, null, 2) }],
       structuredContent: { ...graph }
+    };
+  }
+);
+
+// Register list_entities tool for simple entity lookup
+server.registerTool(
+  "list_entities",
+  {
+    title: "List Entities",
+    description: "List entities with optional filtering by entity type and name pattern. Returns a simple list of entity names and types for quick discovery.",
+    inputSchema: ListEntitiesInputSchema,
+    outputSchema: ListEntitiesOutputSchema
+  },
+  async (input: any) => {
+    const { threadId, entityType, namePattern } = input;
+    const entities = await knowledgeGraphManager.listEntities(threadId, entityType, namePattern);
+    return {
+      content: [{ 
+        type: "text" as const, 
+        text: `Found ${entities.length} entities:\n` + 
+              entities.map(e => `  - ${e.name} (${e.entityType})`).join('\n')
+      }],
+      structuredContent: { entities }
     };
   }
 );

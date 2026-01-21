@@ -281,6 +281,47 @@ export class KnowledgeGraphManager {
     return entityNames;
   }
 
+  /**
+   * List entities with optional filtering by type and name pattern
+   * @param threadId The thread ID to filter by (optional - returns all if not specified)
+   * @param entityType Optional entity type filter (exact match)
+   * @param namePattern Optional name pattern filter (case-insensitive substring match)
+   * @returns Array of entities with name and entityType
+   */
+  async listEntities(
+    threadId?: string,
+    entityType?: string,
+    namePattern?: string
+  ): Promise<Array<{ name: string; entityType: string }>> {
+    const graph = await this.storage.loadGraph();
+    
+    let filteredEntities = graph.entities;
+    
+    // Filter by thread ID if specified
+    if (threadId) {
+      filteredEntities = filteredEntities.filter(e => e.agentThreadId === threadId);
+    }
+    
+    // Filter by entity type if specified
+    if (entityType) {
+      filteredEntities = filteredEntities.filter(e => e.entityType === entityType);
+    }
+    
+    // Filter by name pattern if specified (case-insensitive)
+    if (namePattern) {
+      const pattern = namePattern.toLowerCase();
+      filteredEntities = filteredEntities.filter(e => 
+        e.name.toLowerCase().includes(pattern)
+      );
+    }
+    
+    // Return simplified list with just name and entityType
+    return filteredEntities.map(e => ({
+      name: e.name,
+      entityType: e.entityType
+    }));
+  }
+
   // Enhancement 1: Memory Statistics & Insights
   async getMemoryStats(): Promise<{
     entityCount: number;

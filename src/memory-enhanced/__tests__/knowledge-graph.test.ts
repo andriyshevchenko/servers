@@ -938,4 +938,103 @@ describe('KnowledgeGraphManager - Enhanced with Metadata', () => {
       expect(thread002?.relationCount).toBe(1);
     });
   });
+
+  describe('listEntities', () => {
+    beforeEach(async () => {
+      // Create test entities with different types and threads
+      const entities: Entity[] = [
+        {
+          name: 'ServiceA',
+          entityType: 'Service',
+          observations: [{ id: 'obs1', content: 'Main API', timestamp: '2024-01-01T00:00:00Z', version: 1, agentThreadId: 'thread-1', confidence: 1, importance: 0.9 }],
+          agentThreadId: 'thread-1',
+          timestamp: '2024-01-01T00:00:00Z',
+          confidence: 1.0,
+          importance: 0.9
+        },
+        {
+          name: 'ServiceB',
+          entityType: 'Service',
+          observations: [{ id: 'obs2', content: 'Auth service', timestamp: '2024-01-01T00:00:00Z', version: 1, agentThreadId: 'thread-1', confidence: 1, importance: 0.8 }],
+          agentThreadId: 'thread-1',
+          timestamp: '2024-01-01T00:00:00Z',
+          confidence: 1.0,
+          importance: 0.8
+        },
+        {
+          name: 'DatabaseA',
+          entityType: 'Database',
+          observations: [{ id: 'obs3', content: 'PostgreSQL', timestamp: '2024-01-01T00:00:00Z', version: 1, agentThreadId: 'thread-1', confidence: 1, importance: 0.7 }],
+          agentThreadId: 'thread-1',
+          timestamp: '2024-01-01T00:00:00Z',
+          confidence: 1.0,
+          importance: 0.7
+        },
+        {
+          name: 'ServiceC',
+          entityType: 'Service',
+          observations: [{ id: 'obs4', content: 'Different thread', timestamp: '2024-01-01T00:00:00Z', version: 1, agentThreadId: 'thread-2', confidence: 1, importance: 0.6 }],
+          agentThreadId: 'thread-2',
+          timestamp: '2024-01-01T00:00:00Z',
+          confidence: 1.0,
+          importance: 0.6
+        }
+      ];
+      await manager.createEntities(entities);
+    });
+
+    it('should list all entities when no filters are provided', async () => {
+      const result = await manager.listEntities();
+      expect(result).toHaveLength(4);
+      expect(result.map(e => e.name)).toContain('ServiceA');
+      expect(result.map(e => e.name)).toContain('ServiceB');
+      expect(result.map(e => e.name)).toContain('DatabaseA');
+      expect(result.map(e => e.name)).toContain('ServiceC');
+    });
+
+    it('should filter by threadId', async () => {
+      const result = await manager.listEntities('thread-1');
+      expect(result).toHaveLength(3);
+      expect(result.map(e => e.name)).toContain('ServiceA');
+      expect(result.map(e => e.name)).toContain('ServiceB');
+      expect(result.map(e => e.name)).toContain('DatabaseA');
+      expect(result.map(e => e.name)).not.toContain('ServiceC');
+    });
+
+    it('should filter by entityType', async () => {
+      const result = await manager.listEntities(undefined, 'Service');
+      expect(result).toHaveLength(3);
+      expect(result.every(e => e.entityType === 'Service')).toBe(true);
+    });
+
+    it('should filter by namePattern (case-insensitive)', async () => {
+      const result = await manager.listEntities(undefined, undefined, 'service');
+      expect(result).toHaveLength(3);
+      expect(result.map(e => e.name)).toContain('ServiceA');
+      expect(result.map(e => e.name)).toContain('ServiceB');
+      expect(result.map(e => e.name)).toContain('ServiceC');
+    });
+
+    it('should combine multiple filters', async () => {
+      const result = await manager.listEntities('thread-1', 'Service', 'ServiceA');
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('ServiceA');
+      expect(result[0].entityType).toBe('Service');
+    });
+
+    it('should return empty array when no matches', async () => {
+      const result = await manager.listEntities('thread-1', 'NonExistentType');
+      expect(result).toHaveLength(0);
+    });
+
+    it('should return only name and entityType fields', async () => {
+      const result = await manager.listEntities('thread-1');
+      expect(result.length).toBeGreaterThan(0);
+      result.forEach(entity => {
+        expect(entity).toHaveProperty('name');
+        expect(entity).toHaveProperty('entityType');
+        expect(Object.keys(entity)).toHaveLength(2);
+      });
+    });
+  });
 });
