@@ -155,6 +155,7 @@ downloads/
 eggs/
 .eggs/
 lib/
+!src/memory-enhanced/lib/
 lib64/
 parts/
 sdist/
