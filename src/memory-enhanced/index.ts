@@ -20,6 +20,16 @@ import {
   GetObservationHistoryInputSchema,
   GetObservationHistoryOutputSchema
 } from './lib/schemas.js';
+import { 
+  MAX_OBSERVATION_LENGTH,
+  MIN_OBSERVATION_LENGTH,
+  MAX_SENTENCES,
+  MIN_ENTITY_NAME_LENGTH,
+  MAX_ENTITY_NAME_LENGTH,
+  MIN_ENTITY_TYPE_LENGTH,
+  MAX_ENTITY_TYPE_LENGTH,
+  TARGET_AVG_RELATIONS
+} from './lib/constants.js';
 import { handleSaveMemory } from './lib/save-memory-handler.js';
 import { IStorageAdapter } from './lib/storage-interface.js';
 import { JsonlStorageAdapter } from './lib/jsonl-storage-adapter.js';
@@ -706,6 +716,135 @@ server.registerTool(
     return {
       content: [{ type: "text" as const, text: JSON.stringify({ history: result }, null, 2) }],
       structuredContent: { history: result } as any
+    };
+  }
+);
+
+// Register get_validation_rules tool
+server.registerTool(
+  "get_validation_rules",
+  {
+    title: "Get Validation Rules for Memory Tools",
+    description: "Returns comprehensive validation rules and constraints for all memory tool parameters. Use this tool to understand what values are acceptable before calling other tools, reducing validation errors.",
+    inputSchema: {},
+    outputSchema: {
+      rules: z.object({
+        observations: z.object({
+          min_length: z.number().describe("Minimum observation length in characters"),
+          max_length: z.number().describe("Maximum observation length in characters"),
+          max_sentences: z.number().describe("Maximum number of sentences per observation"),
+          description: z.string().describe("Description of observation constraints")
+        }),
+        entities: z.object({
+          name: z.object({
+            min_length: z.number(),
+            max_length: z.number(),
+            description: z.string()
+          }),
+          type: z.object({
+            min_length: z.number(),
+            max_length: z.number(),
+            naming_convention: z.string(),
+            description: z.string()
+          }),
+          relations: z.object({
+            minimum_required: z.number(),
+            description: z.string()
+          })
+        }),
+        metadata: z.object({
+          confidence: z.object({
+            min: z.number(),
+            max: z.number(),
+            description: z.string()
+          }),
+          importance: z.object({
+            min: z.number(),
+            max: z.number(),
+            description: z.string()
+          })
+        }),
+        quality_scoring: z.object({
+          target_avg_relations: z.number(),
+          description: z.string()
+        }),
+        best_practices: z.array(z.string())
+      })
+    }
+  },
+  async () => {
+    const rules = {
+      observations: {
+        min_length: MIN_OBSERVATION_LENGTH,
+        max_length: MAX_OBSERVATION_LENGTH,
+        max_sentences: MAX_SENTENCES,
+        description: "Each observation must be an atomic fact between 5-150 characters with a maximum of 3 sentences. Split complex information into multiple observations."
+      },
+      entities: {
+        name: {
+          min_length: MIN_ENTITY_NAME_LENGTH,
+          max_length: MAX_ENTITY_NAME_LENGTH,
+          description: "Entity names must be unique identifiers between 1-100 characters"
+        },
+        type: {
+          min_length: MIN_ENTITY_TYPE_LENGTH,
+          max_length: MAX_ENTITY_TYPE_LENGTH,
+          naming_convention: "Start with capital letter (e.g., 'Person', 'Document', 'API')",
+          description: "Entity types classify entities and should be 1-50 characters. Avoid spaces; use CamelCase for multi-word types."
+        },
+        relations: {
+          minimum_required: 1,
+          description: "Every entity MUST have at least 1 relation to another entity in the same save_memory call. Relations show how entities connect."
+        }
+      },
+      metadata: {
+        confidence: {
+          min: 0,
+          max: 1,
+          description: "Confidence represents accuracy certainty (0 = uncertain, 1 = certain). Default is 1.0 for save_memory."
+        },
+        importance: {
+          min: 0,
+          max: 1,
+          description: "Importance represents criticality for memory integrity (0 = not important, 1 = critical). Default is 0.5 for save_memory."
+        }
+      },
+      quality_scoring: {
+        target_avg_relations: TARGET_AVG_RELATIONS,
+        description: `Higher quality scores are achieved when entities have around ${TARGET_AVG_RELATIONS} relations on average and observations are atomic (shorter).`
+      },
+      best_practices: [
+        "Use save_memory tool for creating entities and relations atomically",
+        "Each observation should contain ONE atomic fact only",
+        "Relations must reference entities in the same save_memory call",
+        "Use active voice for relation types (e.g., 'manages', 'created by')",
+        "Entity types should start with capital letters",
+        "Target entity must exist in the same request when creating relations",
+        "Keep observations concise to maximize quality score",
+        "Avoid technical jargon like version numbers as separate sentences"
+      ]
+    };
+    
+    return {
+      content: [{ 
+        type: "text" as const, 
+        text: "# Validation Rules for Memory Tools\n\n" +
+              "## Observations\n" +
+              `- Length: ${rules.observations.min_length}-${rules.observations.max_length} characters\n` +
+              `- Max sentences: ${rules.observations.max_sentences}\n` +
+              `- ${rules.observations.description}\n\n` +
+              "## Entities\n" +
+              `- Name length: ${rules.entities.name.min_length}-${rules.entities.name.max_length} characters\n` +
+              `- Type length: ${rules.entities.type.min_length}-${rules.entities.type.max_length} characters\n` +
+              `- Type convention: ${rules.entities.type.naming_convention}\n` +
+              `- Minimum relations: ${rules.entities.relations.minimum_required} (REQUIRED)\n\n` +
+              "## Metadata\n" +
+              `- Confidence range: ${rules.metadata.confidence.min}-${rules.metadata.confidence.max}\n` +
+              `- Importance range: ${rules.metadata.importance.min}-${rules.metadata.importance.max}\n\n` +
+              "## Best Practices\n" +
+              rules.best_practices.map(bp => `- ${bp}`).join('\n')
+      }],
+      structuredContent: { rules }
     };
   }
 );
