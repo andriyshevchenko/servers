@@ -119,7 +119,7 @@ export const GetObservationHistoryOutputSchema = z.object({
 
 // Schema for list_entities tool (Simple Entity Lookup)
 export const ListEntitiesInputSchema = z.object({
-  threadId: z.string().min(1).describe("Thread ID for this conversation/project"),
+  threadId: z.string().optional().describe("Filter by thread ID (optional - returns entities from all threads if not specified)"),
   entityType: z.string().optional().describe("Filter by entity type (e.g., 'Person', 'Service', 'Document')"),
   namePattern: z.string().optional().describe("Filter by name pattern (case-insensitive substring match)")
 });

@@ -283,7 +283,7 @@ export class KnowledgeGraphManager {
 
   /**
    * List entities with optional filtering by type and name pattern
-   * @param threadId The thread ID to filter by (optional - returns all if not specified)
+   * @param threadId Optional thread ID to filter by. If not provided, returns entities from all threads.
    * @param entityType Optional entity type filter (exact match)
    * @param namePattern Optional name pattern filter (case-insensitive substring match)
    * @returns Array of entities with name and entityType
@@ -297,7 +297,7 @@ export class KnowledgeGraphManager {
     
     let filteredEntities = graph.entities;
     
-    // Filter by thread ID if specified
+    // Filter by thread ID if specified (otherwise returns all threads)
     if (threadId) {
       filteredEntities = filteredEntities.filter(e => e.agentThreadId === threadId);
     }
