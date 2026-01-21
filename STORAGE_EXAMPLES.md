@@ -12,6 +12,7 @@ import { KnowledgeGraphManager } from 'server-memory-enhanced';
 // Uses JSONL storage by default
 const manager = new KnowledgeGraphManager('/path/to/memory-data');
 
+// Note: Storage is automatically initialized on first use
 // Use the manager normally
 await manager.createEntities([
   {

@@ -41,6 +41,10 @@ import { KnowledgeGraphManager } from './index.js';
 
 // Uses JSONL storage by default
 const manager = new KnowledgeGraphManager('/path/to/memory-data');
+
+// Note: Storage is automatically initialized on first use
+// You can now use the manager
+await manager.createEntities([/* ... */]);
 ```
 
 ## Custom Storage Adapters

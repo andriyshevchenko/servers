@@ -3,7 +3,7 @@
  * This allows for different storage backends (JSONL, Neo4j, etc.)
  */
 
-import { Entity, Relation, KnowledgeGraph } from './types.js';
+import { KnowledgeGraph } from './types.js';
 
 /**
  * Interface for storage operations on the knowledge graph

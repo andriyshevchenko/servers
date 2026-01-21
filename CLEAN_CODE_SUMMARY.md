@@ -167,7 +167,7 @@ class TestDirectoryFixture {
 ### After
 - JSONL adapter: 20+ focused methods, ~335 lines (but much cleaner)
 - Test code: ~150 lines + 90 lines of reusable helpers
-- Code coverage: 85.84%
+- Code coverage: 84.86%
 - All 77 tests passing
 - Zero warnings or errors
 

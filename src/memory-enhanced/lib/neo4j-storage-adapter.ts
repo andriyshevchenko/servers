@@ -19,11 +19,12 @@
  *   password: 'password'
  * });
  * 
+ * await neo4jAdapter.initialize();
  * const manager = new KnowledgeGraphManager('', neo4jAdapter);
  * ```
  */
 
-import { Entity, Relation, KnowledgeGraph } from './types.js';
+import { KnowledgeGraph } from './types.js';
 import { IStorageAdapter } from './storage-interface.js';
 
 export interface Neo4jConfig {

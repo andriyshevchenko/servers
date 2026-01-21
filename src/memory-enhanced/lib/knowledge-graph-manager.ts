@@ -10,12 +10,26 @@ import { JsonlStorageAdapter } from './jsonl-storage-adapter.js';
 export class KnowledgeGraphManager {
   private static readonly NEGATION_WORDS = new Set(['not', 'no', 'never', 'neither', 'none', 'doesn\'t', 'don\'t', 'isn\'t', 'aren\'t']);
   private storage: IStorageAdapter;
+  private initializePromise: Promise<void> | null = null;
   
   constructor(memoryDirPath: string, storageAdapter?: IStorageAdapter) {
     this.storage = storageAdapter || new JsonlStorageAdapter(memoryDirPath);
+    // Lazy initialization - will be called on first operation
+  }
+
+  /**
+   * Ensure storage is initialized before any operation
+   * This is called automatically by all public methods
+   */
+  private async ensureInitialized(): Promise<void> {
+    if (!this.initializePromise) {
+      this.initializePromise = this.storage.initialize();
+    }
+    await this.initializePromise;
   }
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
+    await this.ensureInitialized();
     const graph = await this.storage.loadGraph();
     // Entity names are globally unique across all threads in the collaborative knowledge graph
     // This prevents duplicate entities while allowing multiple threads to contribute to the same entity
