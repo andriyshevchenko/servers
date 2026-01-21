@@ -139,6 +139,18 @@ describe('Observation Validation', () => {
     const result = validateObservation('Server at 10.0.0.1 hosts v2.1.0. Access via https://api.server.com. Ready for use.');
     expect(result.valid).toBe(true); // 3 sentences
   });
+
+  // Test to ensure patterns don't create false positives
+  it('should correctly count sentences that have words ending in periods', () => {
+    const result = validateObservation('The cat. The dog. The bird. The fish.');
+    expect(result.valid).toBe(false); // 4 sentences - should reject
+    expect(result.error).toContain('Too many sentences');
+  });
+
+  it('should accept regular sentences without technical content', () => {
+    const result = validateObservation('This is a regular sentence. Another normal sentence. Third sentence here.');
+    expect(result.valid).toBe(true); // 3 sentences, at the limit
+  });
 });
 
 describe('Entity Relations Validation', () => {
