@@ -505,6 +505,10 @@ server.registerTool(
       // If we can't get existing entities, proceed without cross-thread validation
     }
     
+    // Preserve original entityType values before validation normalizes them
+    // This is needed to match warnings to the correct entities
+    const originalEntityTypes = entities.map((e: any) => e.entityType);
+    
     // Run validation (same logic as save_memory but without saving)
     const validationResult = validateSaveMemoryRequest(entities, existingEntityNames);
     
@@ -550,17 +554,17 @@ server.registerTool(
         const warningEntityType = entityMatch[1];
         let attached = false;
         
-        // Find entity whose entityType matches the type in the warning
-        for (const [index, entity] of Object.entries(entities)) {
-          if (entity && (entity as any).entityType === warningEntityType) {
-            const result = results.get(Number(index));
+        // Find entity whose ORIGINAL entityType matches the type in the warning
+        // (warnings contain the original type before normalization)
+        originalEntityTypes.forEach((origType: string, index: number) => {
+          if (origType === warningEntityType) {
+            const result = results.get(index);
             if (result) {
               result.warnings.push(warning);
               attached = true;
-              break;
             }
           }
-        }
+        });
         
         // If no matching entity type found, attach to first entity as fallback
         if (!attached) {
