@@ -15,6 +15,27 @@ const RELATION_TYPE = 'relation';
 const FILE_NOT_FOUND_ERROR = 'ENOENT';
 
 /**
+ * Represents a file system error with a code property
+ */
+interface FileSystemError extends Error {
+  code: string;
+}
+
+/**
+ * Type guard to check if an error is a FileSystemError
+ */
+function isFileSystemError(error: unknown): error is FileSystemError {
+  return error instanceof Error && 'code' in error;
+}
+
+/**
+ * Check if a string field is valid (non-empty after trimming)
+ */
+function isValidString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+/**
  * Represents thread-specific data
  */
 interface ThreadData {
@@ -54,11 +75,11 @@ export class JsonlStorageAdapter implements IStorageAdapter {
    */
   private isValidEntity(item: JsonlItem): boolean {
     return item.type === ENTITY_TYPE &&
-           Boolean(item.name) &&
-           Boolean(item.entityType) &&
+           isValidString(item.name) &&
+           isValidString(item.entityType) &&
            Array.isArray(item.observations) &&
-           Boolean(item.agentThreadId) &&
-           Boolean(item.timestamp) &&
+           isValidString(item.agentThreadId) &&
+           isValidString(item.timestamp) &&
            typeof item.confidence === 'number' &&
            typeof item.importance === 'number';
   }
@@ -68,11 +89,11 @@ export class JsonlStorageAdapter implements IStorageAdapter {
    */
   private isValidRelation(item: JsonlItem): boolean {
     return item.type === RELATION_TYPE &&
-           Boolean(item.from) &&
-           Boolean(item.to) &&
-           Boolean(item.relationType) &&
-           Boolean(item.agentThreadId) &&
-           Boolean(item.timestamp) &&
+           isValidString(item.from) &&
+           isValidString(item.to) &&
+           isValidString(item.relationType) &&
+           isValidString(item.agentThreadId) &&
+           isValidString(item.timestamp) &&
            typeof item.confidence === 'number' &&
            typeof item.importance === 'number';
   }
@@ -184,7 +205,7 @@ export class JsonlStorageAdapter implements IStorageAdapter {
    * Check if error is a file not found error
    */
   private isFileNotFoundError(error: unknown): boolean {
-    return error instanceof Error && 'code' in error && (error as any).code === FILE_NOT_FOUND_ERROR;
+    return isFileSystemError(error) && error.code === FILE_NOT_FOUND_ERROR;
   }
 
   /**
