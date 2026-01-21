@@ -69,7 +69,8 @@ export const SaveMemoryOutputSchema = z.object({
   success: z.boolean(),
   created: z.object({
     entities: z.number(),
-    relations: z.number()
+    relations: z.number(),
+    entity_names: z.array(z.string()).optional().describe("Names of created entities (for reference in subsequent calls)")
   }),
   warnings: z.array(z.string()),
   quality_score: z.number().min(0).max(1),

@@ -20,9 +20,12 @@ import {
   GetObservationHistoryInputSchema,
   GetObservationHistoryOutputSchema,
   ListEntitiesInputSchema,
-  ListEntitiesOutputSchema
+  ListEntitiesOutputSchema,
+  ValidateMemoryInputSchema,
+  ValidateMemoryOutputSchema
 } from './lib/schemas.js';
 import { handleSaveMemory } from './lib/save-memory-handler.js';
+import { validateSaveMemoryRequest } from './lib/validation.js';
 import { IStorageAdapter } from './lib/storage-interface.js';
 import { JsonlStorageAdapter } from './lib/jsonl-storage-adapter.js';
 import { Neo4jStorageAdapter } from './lib/neo4j-storage-adapter.js';
@@ -160,12 +163,22 @@ server.registerTool(
     );
     
     if (result.success) {
+      // Build success message with entity names
+      let successText = `✓ Successfully saved ${result.created.entities} entities and ${result.created.relations} relations.\n` +
+                        `Quality score: ${(result.quality_score * 100).toFixed(1)}%\n`;
+      
+      if (result.created.entity_names && result.created.entity_names.length > 0) {
+        successText += `\nCreated entities: ${result.created.entity_names.join(', ')}\n`;
+      }
+      
+      if (result.warnings.length > 0) {
+        successText += `\nWarnings:\n${result.warnings.join('\n')}`;
+      }
+      
       return {
         content: [{ 
           type: "text" as const, 
-          text: `✓ Successfully saved ${result.created.entities} entities and ${result.created.relations} relations.\n` +
-                `Quality score: ${(result.quality_score * 100).toFixed(1)}%\n` +
-                (result.warnings.length > 0 ? `\nWarnings:\n${result.warnings.join('\n')}` : '')
+          text: successText
         }],
         structuredContent: result as any
       };

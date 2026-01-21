@@ -74,6 +74,7 @@ export interface SaveMemoryOutput {
   created: {
     entities: number;
     relations: number;
+    entity_names?: string[]; // Names of created entities (for reference in subsequent calls)
   };
   warnings: string[];
   quality_score: number;

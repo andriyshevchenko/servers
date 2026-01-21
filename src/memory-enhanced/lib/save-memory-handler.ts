@@ -144,11 +144,15 @@ export async function handleSaveMemory(
     // Calculate quality score
     const qualityScore = calculateQualityScore(input.entities);
     
+    // Extract entity names for reference in subsequent calls
+    const entityNames = createdEntities.map(e => e.name);
+    
     return {
       success: true,
       created: {
         entities: createdEntities.length,
-        relations: createdRelations.length
+        relations: createdRelations.length,
+        entity_names: entityNames
       },
       warnings: validationResult.warnings,
       quality_score: qualityScore

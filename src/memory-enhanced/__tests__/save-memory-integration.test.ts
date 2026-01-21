@@ -600,4 +600,67 @@ describe('Save Memory Handler - Integration Tests', () => {
       expect(entity2Error.entity_index).toBe(1); // Second entity (0-indexed)
     });
   });
+
+  describe('Entity Names in Response', () => {
+    it('should return entity names after successful save', async () => {
+      const input: SaveMemoryInput = {
+        entities: [
+          {
+            name: 'ServiceA',
+            entityType: 'Service',
+            observations: ['Handles authentication'],
+            relations: [{ targetEntity: 'ServiceB', relationType: 'depends on' }]
+          },
+          {
+            name: 'ServiceB',
+            entityType: 'Service',
+            observations: ['Manages user data'],
+            relations: [{ targetEntity: 'ServiceA', relationType: 'supports' }]
+          }
+        ],
+        threadId: 'test-thread-entity-names'
+      };
+
+      const result = await handleSaveMemory(
+        input,
+        (entities) => manager.createEntities(entities),
+        (relations) => manager.createRelations(relations)
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.created.entity_names).toBeDefined();
+      expect(result.created.entity_names).toHaveLength(2);
+      expect(result.created.entity_names).toContain('ServiceA');
+      expect(result.created.entity_names).toContain('ServiceB');
+    });
+
+    it('should not include entity names on validation failure', async () => {
+      const input: SaveMemoryInput = {
+        entities: [
+          {
+            name: 'InvalidEntity',
+            entityType: 'Test',
+            observations: ['a'.repeat(301)], // Too long
+            relations: [{ targetEntity: 'Other', relationType: 'relates to' }]
+          },
+          {
+            name: 'Other',
+            entityType: 'Test',
+            observations: ['Valid'],
+            relations: [{ targetEntity: 'InvalidEntity', relationType: 'relates to' }]
+          }
+        ],
+        threadId: 'test-thread-no-names'
+      };
+
+      const result = await handleSaveMemory(
+        input,
+        (entities) => manager.createEntities(entities),
+        (relations) => manager.createRelations(relations)
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.created.entity_names).toBeUndefined();
+    });
+  });
 });
