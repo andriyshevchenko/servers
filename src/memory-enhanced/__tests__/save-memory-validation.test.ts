@@ -89,6 +89,56 @@ describe('Observation Validation', () => {
     expect(result.valid).toBe(false);
     expect(result.error).toContain('Too many sentences');
   });
+
+  // Tests for smarter sentence detection (technical content)
+  it('should accept URLs without counting colons/periods as sentence boundaries', () => {
+    const result = validateObservation('URL: https://dvdat-uks-01-es.develastic.nidemo.com/');
+    expect(result.valid).toBe(true);
+  });
+
+  it('should accept HTTP URLs', () => {
+    const result = validateObservation('Service endpoint is http://api.example.com/v1/data');
+    expect(result.valid).toBe(true);
+  });
+
+  it('should accept observations with hostnames', () => {
+    const result = validateObservation('Connected to ni-internal-dev.servicebus.windows.net successfully');
+    expect(result.valid).toBe(true);
+  });
+
+  it('should accept observations with IP addresses', () => {
+    const result1 = validateObservation('Server IP is 192.168.1.1 for local access');
+    expect(result1.valid).toBe(true);
+
+    const result2 = validateObservation('Connected to 10.0.0.5 on port 8080');
+    expect(result2.valid).toBe(true);
+  });
+
+  it('should accept observations with Windows file paths', () => {
+    const result = validateObservation('Config file located at C:\\Program Files\\App\\config.json');
+    expect(result.valid).toBe(true);
+  });
+
+  it('should accept observations with multiple technical elements', () => {
+    const result = validateObservation('API v2.0 at https://api.example.com uses 192.168.1.100');
+    expect(result.valid).toBe(true);
+  });
+
+  it('should still correctly count actual sentences with URLs', () => {
+    const result = validateObservation('Visit https://example.com for details. Documentation is available. Support is provided.');
+    expect(result.valid).toBe(true); // 3 sentences, at the limit
+  });
+
+  it('should reject when there are too many actual sentences with URLs', () => {
+    const result = validateObservation('Visit https://example.com for details. Documentation is available. Support is provided. Testing complete.');
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('Too many sentences');
+  });
+
+  it('should handle mixed technical content and sentences', () => {
+    const result = validateObservation('Server at 10.0.0.1 hosts v2.1.0. Access via https://api.server.com. Ready for use.');
+    expect(result.valid).toBe(true); // 3 sentences
+  });
 });
 
 describe('Entity Relations Validation', () => {

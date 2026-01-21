@@ -14,18 +14,27 @@ import {
 } from './constants.js';
 
 /**
- * Counts actual sentences in text, ignoring periods in version numbers and decimals
+ * Counts actual sentences in text, ignoring periods in technical content
  * @param text The text to analyze
  * @returns Number of actual sentences
  */
 function countSentences(text: string): number {
-  // Remove version numbers (e.g., 1.2.0, v5.4.3, V2.1.0) and decimal numbers before counting
-  // This prevents false positives where technical data is incorrectly counted as sentences
-  // Using explicit case handling [vV] for version prefix
-  const cleaned = text
-    .replace(/\b[vV]?\d+\.\d+(\.\d+)*\b/g, 'VERSION'); // handles version numbers and decimals
+  // Patterns to ignore - technical content that contains periods but aren't sentence boundaries
+  const patternsToIgnore = [
+    /https?:\/\/[^\s]+/g,           // URLs (http:// or https://)
+    /\b\d+\.\d+\.\d+\.\d+\b/g,      // IP addresses (e.g., 192.168.1.1)
+    /[A-Za-z]:\\[^\s]+/g,           // Windows paths (e.g., C:\path\to\file)
+    /\b[vV]?\d+\.\d+(\.\d+)*\b/g,  // Version numbers (e.g., v1.2.0, 5.4.3)
+    /\w+\.\w+\.\w+/g,               // Hostnames/domains (e.g., subdomain.domain.com)
+  ];
   
-  // Split on actual sentence terminators
+  // Replace technical patterns with placeholders to prevent false sentence detection
+  let cleaned = text;
+  for (const pattern of patternsToIgnore) {
+    cleaned = cleaned.replace(pattern, 'PLACEHOLDER');
+  }
+  
+  // Split on actual sentence terminators and count non-empty sentences
   const sentences = cleaned.split(SENTENCE_TERMINATORS).filter(s => s.trim().length > 0);
   return sentences.length;
 }
