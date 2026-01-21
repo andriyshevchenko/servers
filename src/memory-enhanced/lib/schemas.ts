@@ -130,3 +130,21 @@ export const ListEntitiesOutputSchema = z.object({
     entityType: z.string()
   })).describe("List of entities matching the filters")
 });
+
+// Schema for validate_memory tool (Pre-Validation)
+export const ValidateMemoryInputSchema = z.object({
+  entities: z.array(SaveMemoryEntitySchema).min(1).describe("Array of entities to validate"),
+  threadId: z.string().min(1).describe("Thread ID for this conversation/project")
+});
+
+export const ValidateMemoryOutputSchema = z.object({
+  all_valid: z.boolean().describe("True if all entities pass validation"),
+  results: z.array(z.object({
+    index: z.number().describe("Entity index in the input array"),
+    name: z.string().describe("Entity name"),
+    type: z.string().describe("Entity type"),
+    valid: z.boolean().describe("True if this entity passes validation"),
+    errors: z.array(z.string()).describe("List of validation errors"),
+    warnings: z.array(z.string()).describe("List of validation warnings")
+  })).describe("Validation results for each entity")
+});

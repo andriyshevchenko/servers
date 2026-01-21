@@ -472,6 +472,121 @@ server.registerTool(
   }
 );
 
+// Register validate_memory tool for pre-validation (dry-run)
+server.registerTool(
+  "validate_memory",
+  {
+    title: "Validate Memory",
+    description: "Validate entities without saving (dry-run). Check for errors before attempting save_memory. Returns detailed validation results per entity.",
+    inputSchema: ValidateMemoryInputSchema,
+    outputSchema: ValidateMemoryOutputSchema
+  },
+  async (input: any) => {
+    const { entities, threadId } = input;
+    
+    // Get existing entity names for cross-thread reference validation
+    let existingEntityNames: Set<string> | undefined;
+    try {
+      existingEntityNames = await knowledgeGraphManager.getEntityNamesInThread(threadId);
+    } catch (error) {
+      // If we can't get existing entities, proceed without cross-thread validation
+    }
+    
+    // Run validation (same logic as save_memory but without saving)
+    const validationResult = validateSaveMemoryRequest(entities, existingEntityNames);
+    
+    // Transform validation result into per-entity format
+    const results = new Map<number, {
+      index: number;
+      name: string;
+      type: string;
+      valid: boolean;
+      errors: string[];
+      warnings: string[];
+    }>();
+    
+    // Initialize all entities as valid
+    entities.forEach((entity: any, index: number) => {
+      results.set(index, {
+        index: index,
+        name: entity.name,
+        type: entity.entityType,
+        valid: true,
+        errors: [],
+        warnings: []
+      });
+    });
+    
+    // Add errors to corresponding entities
+    validationResult.errors.forEach((err: any) => {
+      const result = results.get(err.entityIndex);
+      if (result) {
+        result.valid = false;
+        const errorMsg = err.suggestion 
+          ? `${err.error} Suggestion: ${err.suggestion}` 
+          : err.error;
+        result.errors.push(errorMsg);
+      }
+    });
+    
+    // Add warnings to corresponding entities
+    validationResult.warnings.forEach((warning: string) => {
+      // Parse entity name from warning if possible, otherwise add to first entity
+      const entityMatch = warning.match(/EntityType '([^']+)'/);
+      if (entityMatch) {
+        // Find entity by matching in warning
+        for (const [index, entity] of Object.entries(entities)) {
+          const result = results.get(Number(index));
+          if (result) {
+            result.warnings.push(warning);
+            break;
+          }
+        }
+      }
+    });
+    
+    const resultArray = Array.from(results.values());
+    const allValid = resultArray.every(r => r.valid);
+    
+    // Format response text
+    let responseText = allValid 
+      ? `✓ All ${entities.length} entities are valid and ready to save.\n`
+      : `✗ Validation failed for ${resultArray.filter(r => !r.valid).length} of ${entities.length} entities:\n\n`;
+    
+    if (!allValid) {
+      resultArray.filter(r => !r.valid).forEach(r => {
+        responseText += `Entity #${r.index} "${r.name}" (${r.type}):\n`;
+        r.errors.forEach(e => responseText += `  - ${e}\n`);
+        if (r.warnings.length > 0) {
+          r.warnings.forEach(w => responseText += `  ⚠ ${w}\n`);
+        }
+        responseText += '\n';
+      });
+    }
+    
+    // Add warnings for valid entities if any
+    const validWithWarnings = resultArray.filter(r => r.valid && r.warnings.length > 0);
+    if (validWithWarnings.length > 0) {
+      responseText += 'Warnings:\n';
+      validWithWarnings.forEach(r => {
+        responseText += `Entity #${r.index} "${r.name}" (${r.type}):\n`;
+        r.warnings.forEach(w => responseText += `  ⚠ ${w}\n`);
+      });
+    }
+    
+    return {
+      content: [{ 
+        type: "text" as const, 
+        text: responseText
+      }],
+      structuredContent: {
+        all_valid: allValid,
+        results: resultArray
+      }
+    };
+  }
+);
+
 // Register get_memory_stats tool
 server.registerTool(
   "get_memory_stats",
