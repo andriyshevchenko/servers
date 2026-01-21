@@ -15,8 +15,10 @@ An enhanced version of the Memory MCP server that provides persistent knowledge 
 ### Entities
 Each entity now includes:
 - `name`: Entity identifier
-- `entityType`: Type of entity
-- `observations`: Array of observation strings
+- `entityType`: Type of entity (free-form, any domain-specific type allowed)
+- `observations`: Array of **versioned Observation objects** (not strings) - **BREAKING CHANGE**
+  - Each observation has: `id`, `content`, `timestamp`, `version`, `supersedes`, `superseded_by`
+  - Supports full version history tracking
 - `agentThreadId`: Unique identifier for the agent thread
 - `timestamp`: ISO 8601 timestamp of creation
 - `confidence`: Confidence score (0.0 to 1.0)
@@ -52,9 +54,21 @@ The server stores data in separate JSONL files per agent thread:
 
 ## Available Tools
 
-### Core Operations
-1. **create_entities**: Create new entities with metadata (including importance)
-2. **create_relations**: Create relationships between entities with metadata (including importance)
+### ⭐ Recommended Tool (New)
+1. **save_memory**: **[RECOMMENDED]** Unified tool for creating entities and relations atomically with server-side validation
+   - Enforces observation limits (max 150 chars, 2 sentences per observation)
+   - Requires at least 1 relation per entity (prevents orphaned nodes)
+   - Free-form entity types with soft normalization
+   - Atomic transactions (all-or-nothing)
+   - Bidirectional relation tracking
+   - Quality score calculation
+   - Clear, actionable error messages
+
+### Core Operations (Legacy)
+> ⚠️ **Note**: `create_entities` and `create_relations` are **deprecated**. New code should use `save_memory` for better reliability and validation.
+
+1. **create_entities**: Create new entities with metadata (including importance) - **[DEPRECATED - Use save_memory]**
+2. **create_relations**: Create relationships between entities with metadata (including importance) - **[DEPRECATED - Use save_memory]**
 3. **add_observations**: Add observations to existing entities with metadata (including importance)
 4. **delete_entities**: Remove entities and cascading relations
 5. **delete_observations**: Remove specific observations
@@ -65,11 +79,20 @@ The server stores data in separate JSONL files per agent thread:
 10. **query_nodes**: Advanced querying with range-based filtering by timestamp, confidence, and importance
 
 ### Memory Management & Insights
-11. **get_memory_stats**: Get comprehensive statistics (entity counts, thread activity, avg confidence/importance, recent activity)
-12. **get_recent_changes**: Retrieve entities and relations created/modified since a specific timestamp
-13. **prune_memory**: Remove old or low-importance entities to manage memory size
-14. **bulk_update**: Efficiently update multiple entities at once (confidence, importance, observations)
-15. **list_conversations**: List all available agent threads (conversations) with metadata including entity counts, relation counts, and activity timestamps
+11. **get_analytics**: **[NEW]** Get simple, LLM-friendly analytics about your knowledge graph
+    - Recent changes (last 10 entities)
+    - Top important entities (by importance score)
+    - Most connected entities (by relation count)
+    - Orphaned entities (quality check)
+12. **get_observation_history**: **[NEW]** Retrieve version history for observations
+    - Track how observations evolve over time
+    - View complete version chains
+    - Supports rollback by viewing previous versions
+13. **get_memory_stats**: Get comprehensive statistics (entity counts, thread activity, avg confidence/importance, recent activity)
+14. **get_recent_changes**: Retrieve entities and relations created/modified since a specific timestamp
+15. **prune_memory**: Remove old or low-importance entities to manage memory size
+16. **bulk_update**: Efficiently update multiple entities at once (confidence, importance, observations)
+17. **list_conversations**: List all available agent threads (conversations) with metadata including entity counts, relation counts, and activity timestamps
 
 ### Relationship Intelligence
 16. **find_relation_path**: Find the shortest path of relationships between two entities (useful for "how are they connected?")
@@ -102,38 +125,74 @@ Set the `MEMORY_DIR_PATH` environment variable to customize the storage location
 MEMORY_DIR_PATH=/path/to/memory/directory npx mcp-server-memory-enhanced
 ```
 
-## Example
+## User Guide
+
+### ✨ Using save_memory (Recommended)
+
+The `save_memory` tool is the recommended way to create entities and relations. It provides atomic transactions and server-side validation to ensure high-quality knowledge graphs.
+
+#### Key Principles
+
+1. **Atomic Observations**: Each observation should be a single, atomic fact
+   - ✅ Good: `"Works at Google"`, `"Lives in San Francisco"`
+   - ❌ Bad: `"Works at Google and lives in San Francisco and has a PhD in Computer Science"`
+   - **Max length**: 150 characters per observation
+   - **Max sentences**: 2 sentences per observation (one fact = one observation is ideal)
+
+2. **Mandatory Relations**: Every entity must connect to at least one other entity
+   - ✅ Good: `{ targetEntity: "Google", relationType: "works at" }`
+   - ❌ Bad: Empty relations array `[]`
+   - This prevents orphaned nodes and ensures a well-connected knowledge graph
+
+3. **Free Entity Types**: Use any entity type that makes sense for your domain
+   - ✅ Good: `"Person"`, `"Company"`, `"Document"`, `"Recipe"`, `"Patient"`, `"API"`
+   - Soft normalization: `"person"` → `"Person"` (warning, not error)
+   - Space warning: `"API Key"` → suggests `"APIKey"`
+
+4. **Error Messages**: The tool provides clear, actionable error messages
+   - Too long: `"Observation too long (165 chars). Max 150. Suggestion: Split into multiple observations."`
+   - No relations: `"Entity 'X' must have at least 1 relation. Suggestion: Add relations to show connections."`
+   - Too many sentences: `"Too many sentences (3). Max 2. Suggestion: Split this into 3 separate observations."`
+
+### Example Usage
 
 ```typescript
-// Create entities with metadata including importance
-await createEntities({
+// ✅ RECOMMENDED: Use save_memory for atomic entity and relation creation
+await save_memory({
   entities: [
     {
       name: "Alice",
-      entityType: "person",
-      observations: ["works at Acme Corp"],
-      agentThreadId: "thread-001",
-      timestamp: "2024-01-20T10:00:00Z",
-      confidence: 0.95,
-      importance: 0.9  // Critical entity
+      entityType: "Person",
+      observations: ["Works at Google", "Lives in SF"],  // Atomic facts, under 150 chars
+      relations: [{ targetEntity: "Bob", relationType: "knows" }]  // At least 1 relation required
+    },
+    {
+      name: "Bob",
+      entityType: "Person",
+      observations: ["Works at Microsoft"],
+      relations: [{ targetEntity: "Alice", relationType: "knows" }]
     }
-  ]
+  ],
+  threadId: "conversation-001"
 });
 
-// Create relations with metadata including importance
-await createRelations({
-  relations: [
-    {
-      from: "Alice",
-      to: "Bob",
-      relationType: "knows",
-      agentThreadId: "thread-001",
-      timestamp: "2024-01-20T10:01:00Z",
-      confidence: 0.9,
-      importance: 0.75  // Important relationship
-    }
-  ]
+// Get analytics about your knowledge graph
+await get_analytics({
+  threadId: "conversation-001"
 });
+// Returns: {
+//   recent_changes: [...],      // Last 10 entities
+//   top_important: [...],       // Top 10 by importance
+//   most_connected: [...],      // Top 10 by relation count
+//   orphaned_entities: [...]    // Quality check
+// }
+
+// Get observation version history
+await get_observation_history({
+  entityName: "Python Scripts",
+  observationId: "obs_abc123"
+});
+// Returns: { history: [{ id, content, version, timestamp, supersedes, superseded_by }, ...] }
 
 // Query nodes with range-based filtering
 await queryNodes({
@@ -177,6 +236,49 @@ await bulkUpdate({
 // Prune old/unimportant data
 await pruneMemory({ olderThan: "2024-01-01T00:00:00Z", importanceLessThan: 0.3, keepMinEntities: 100 });
 ```
+
+### 🔄 Migration Guide
+
+For users of the old `create_entities` and `create_relations` tools:
+
+#### What Changed
+- **Old approach**: Two separate tools that could be used independently
+  - `create_entities` → creates entities
+  - `create_relations` → creates relations (optional, often skipped by LLMs)
+- **New approach**: Single `save_memory` tool with atomic transactions
+  - Creates entities and relations together
+  - Enforces mandatory relations (at least 1 per entity)
+  - Validates observation length and atomicity
+
+#### Migrating Your Code
+```typescript
+// ❌ OLD WAY (deprecated but still works)
+await create_entities({
+  entities: [{ name: "Alice", entityType: "person", observations: ["works at Google and lives in SF"] }]
+});
+await create_relations({  // Often forgotten!
+  relations: [{ from: "Alice", to: "Bob", relationType: "knows" }]
+});
+
+// ✅ NEW WAY (recommended)
+await save_memory({
+  entities: [
+    {
+      name: "Alice",
+      entityType: "Person",
+      observations: ["Works at Google", "Lives in SF"],  // Split into atomic facts
+      relations: [{ targetEntity: "Bob", relationType: "knows" }]  // Required!
+    }
+  ],
+  threadId: "conversation-001"
+});
+```
+
+#### Migration Strategy
+1. **Old tools remain available**: `create_entities` and `create_relations` are deprecated but not removed
+2. **No forced migration**: Update your code gradually at your own pace
+3. **New code should use `save_memory`**: Benefits from validation and atomic transactions
+4. **Observation versioning**: New installations use versioned observations (breaking change for data model)
 
 ## Development
 
