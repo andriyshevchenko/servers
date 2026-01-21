@@ -27,7 +27,7 @@
  * ```
  */
 
-import neo4j, { Driver, Session } from 'neo4j-driver';
+import neo4j, { Driver, Session, ManagedTransaction, Record } from 'neo4j-driver';
 import { Entity, Relation, KnowledgeGraph, Observation } from './types.js';
 import { IStorageAdapter } from './storage-interface.js';
 import { SCHEMA_QUERIES, ENTITY_QUERIES, RELATION_QUERIES, MAINTENANCE_QUERIES } from './neo4j-queries.js';
@@ -148,7 +148,7 @@ export class Neo4jStorageAdapter implements IStorageAdapter {
    * Map Neo4j record to Entity object.
    * Extracted for Single Responsibility Principle and DRY.
    */
-  private mapRecordToEntity(record: any): Entity {
+  private mapRecordToEntity(record: Record): Entity {
     return {
       name: record.get('name'),
       entityType: record.get('entityType'),
@@ -164,7 +164,7 @@ export class Neo4jStorageAdapter implements IStorageAdapter {
    * Map Neo4j record to Relation object.
    * Extracted for Single Responsibility Principle and DRY.
    */
-  private mapRecordToRelation(record: any): Relation {
+  private mapRecordToRelation(record: Record): Relation {
     return {
       from: record.get('from'),
       to: record.get('to'),
@@ -220,7 +220,7 @@ export class Neo4jStorageAdapter implements IStorageAdapter {
     
     const session = await this.createSession();
     try {
-      await session.executeWrite(async (tx) => {
+      await session.executeWrite(async (tx: ManagedTransaction) => {
         await this.clearDatabase(tx);
         await this.saveEntities(tx, graph.entities);
         await this.saveRelations(tx, graph.relations);
@@ -234,7 +234,7 @@ export class Neo4jStorageAdapter implements IStorageAdapter {
    * Clear all data from the database.
    * Extracted for Single Responsibility Principle.
    */
-  private async clearDatabase(tx: any): Promise<void> {
+  private async clearDatabase(tx: ManagedTransaction): Promise<void> {
     await tx.run(MAINTENANCE_QUERIES.deleteAll);
   }
 
@@ -242,7 +242,7 @@ export class Neo4jStorageAdapter implements IStorageAdapter {
    * Save all entities to Neo4j.
    * Extracted for Single Responsibility Principle and testability.
    */
-  private async saveEntities(tx: any, entities: Entity[]): Promise<void> {
+  private async saveEntities(tx: ManagedTransaction, entities: Entity[]): Promise<void> {
     for (const entity of entities) {
       await this.saveEntity(tx, entity);
     }
@@ -252,7 +252,7 @@ export class Neo4jStorageAdapter implements IStorageAdapter {
    * Save a single entity to Neo4j.
    * Extracted for DRY and testability.
    */
-  private async saveEntity(tx: any, entity: Entity): Promise<void> {
+  private async saveEntity(tx: ManagedTransaction, entity: Entity): Promise<void> {
     await tx.run(ENTITY_QUERIES.create, {
       name: entity.name,
       entityType: entity.entityType,
@@ -268,7 +268,7 @@ export class Neo4jStorageAdapter implements IStorageAdapter {
    * Save all relations to Neo4j.
    * Extracted for Single Responsibility Principle and testability.
    */
-  private async saveRelations(tx: any, relations: Relation[]): Promise<void> {
+  private async saveRelations(tx: ManagedTransaction, relations: Relation[]): Promise<void> {
     for (const relation of relations) {
       await this.saveRelation(tx, relation);
     }
@@ -278,7 +278,7 @@ export class Neo4jStorageAdapter implements IStorageAdapter {
    * Save a single relation to Neo4j.
    * Extracted for DRY and testability.
    */
-  private async saveRelation(tx: any, relation: Relation): Promise<void> {
+  private async saveRelation(tx: ManagedTransaction, relation: Relation): Promise<void> {
     await tx.run(RELATION_QUERIES.create, {
       from: relation.from,
       to: relation.to,

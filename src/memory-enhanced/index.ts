@@ -75,7 +75,9 @@ async function createNeo4jAdapter(config: { uri: string; username: string; passw
     console.error(STORAGE_LOG_MESSAGES.NEO4J_SUCCESS);
     return neo4jAdapter;
   } catch (error) {
-    console.error(STORAGE_LOG_MESSAGES.NEO4J_FALLBACK, error instanceof Error ? error.message : String(error));
+    // Sanitize error message to avoid exposing credentials
+    const safeErrorMessage = error instanceof Error ? error.message.replace(/password[=:][\S]+/gi, 'password:***') : 'Connection failed';
+    console.error(STORAGE_LOG_MESSAGES.NEO4J_FALLBACK, safeErrorMessage);
     return null;
   }
 }
@@ -718,6 +720,34 @@ async function main() {
 
   // Initialize knowledge graph manager with the storage adapter
   knowledgeGraphManager = new KnowledgeGraphManager(MEMORY_DIR_PATH, storageAdapter);
+
+  // Register graceful shutdown handlers to ensure storage adapter is closed
+  let isShuttingDown = false;
+  const shutdown = async (signal: NodeJS.Signals) => {
+    if (isShuttingDown) {
+      return;
+    }
+    isShuttingDown = true;
+    console.error(`Received ${signal}, shutting down gracefully...`);
+    try {
+      // Close storage adapter (including Neo4j connections) before exiting
+      if (storageAdapter && 'close' in storageAdapter && typeof storageAdapter.close === 'function') {
+        await storageAdapter.close();
+      }
+    } catch (err) {
+      console.error("Error during storage adapter shutdown:", err);
+    } finally {
+      process.exit(0);
+    }
+  };
+
+  process.on("SIGINT", () => {
+    void shutdown("SIGINT");
+  });
+
+  process.on("SIGTERM", () => {
+    void shutdown("SIGTERM");
+  });
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

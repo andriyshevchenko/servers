@@ -30,6 +30,10 @@ export const ENTITY_QUERIES = {
            e.importance as importance
   `,
   
+  // Note: Using CREATE instead of MERGE is intentional here.
+  // The saveGraph() method first deletes all existing data, then creates fresh entities.
+  // This is a complete graph replacement operation, not an upsert.
+  // The unique constraint on entity names prevents duplicates within a single transaction.
   create: `
     CREATE (e:Entity {
       name: $name,
@@ -58,6 +62,11 @@ export const RELATION_QUERIES = {
            r.importance as importance
   `,
   
+  // Note: Using MATCH for both entities is intentional.
+  // The saveGraph() method ensures entities are created first, then relations.
+  // Since this runs in a transaction after entity creation, both entities must exist.
+  // If either entity doesn't exist, the relation creation will fail the transaction,
+  // maintaining data integrity (no orphaned relations).
   create: `
     MATCH (from:Entity {name: $from})
     MATCH (to:Entity {name: $to})

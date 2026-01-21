@@ -6,6 +6,23 @@
 # Prerequisites:
 # - Docker installed
 # - Docker Compose installed
+# 
+# Usage: bash test-neo4j.sh
+# Or make executable: chmod +x test-neo4j.sh && ./test-neo4j.sh
+
+set -e  # Exit on error
+
+# Get the directory where the script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+# Trap to ensure cleanup runs even if script fails or is interrupted
+cleanup() {
+    echo ""
+    echo "Step 3: Cleaning up..."
+    docker-compose down -v
+}
+trap cleanup EXIT INT TERM
 
 echo "=== Neo4j Storage Integration Test ==="
 echo ""
@@ -29,7 +46,7 @@ echo ""
 
 # Step 2: Run the E2E tests with Neo4j
 echo "Step 2: Running E2E tests with Neo4j..."
-cd src/memory-enhanced
+cd "$SCRIPT_DIR/src/memory-enhanced"
 
 export NEO4J_URI=neo4j://localhost:7687
 export NEO4J_USERNAME=neo4j
@@ -39,11 +56,8 @@ npm test -- neo4j-e2e.test.ts
 
 TEST_RESULT=$?
 
-# Step 3: Clean up
-echo ""
-echo "Step 3: Cleaning up..."
-cd ../..
-docker-compose down -v
+# Return to script directory
+cd "$SCRIPT_DIR"
 
 if [ $TEST_RESULT -eq 0 ]; then
     echo ""
