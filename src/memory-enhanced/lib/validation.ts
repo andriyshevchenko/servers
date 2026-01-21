@@ -118,7 +118,7 @@ export function validateSaveMemoryRequest(
     entity.entityType = normalized; // Apply normalization
     warnings.push(...typeWarnings);
     
-    // Validate observations
+    // Validate observations (note: observations are still strings in SaveMemoryEntity input)
     for (let i = 0; i < entity.observations.length; i++) {
       const obsResult = validateObservation(entity.observations[i]);
       if (!obsResult.valid) {

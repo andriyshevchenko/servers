@@ -4,11 +4,24 @@
 
 import { z } from "zod";
 
+// Schema for Observation with versioning support
+export const ObservationSchema = z.object({
+  id: z.string().describe("Unique observation ID"),
+  content: z.string().describe("The fact/observation text"),
+  timestamp: z.string().describe("ISO 8601 timestamp"),
+  version: z.number().int().min(1).describe("Version number (incremented on update)"),
+  supersedes: z.string().optional().describe("ID of previous observation (if this is an update)"),
+  superseded_by: z.string().optional().describe("ID of observation that supersedes this one"),
+  agentThreadId: z.string().describe("Thread that created this observation"),
+  confidence: z.number().min(0).max(1).describe("Confidence in accuracy (0-1)"),
+  importance: z.number().min(0).max(1).describe("Importance for memory integrity (0-1)")
+});
+
 // Schema for existing tools
 export const EntitySchema = z.object({
   name: z.string().describe("Unique identifier for the entity"),
   entityType: z.string().describe("Classification of the entity (e.g., person, document, task)"),
-  observations: z.array(z.string()).describe("Specific observations or facts about this entity"),
+  observations: z.array(ObservationSchema).describe("Versioned observations about this entity"),
   agentThreadId: z.string().describe("Agent thread that created/modified this entity"),
   timestamp: z.string().describe("ISO 8601 timestamp of creation/modification"),
   confidence: z.number().min(0).max(1).describe("Confidence in the accuracy of this entity (0-1)"),
@@ -92,4 +105,14 @@ export const GetAnalyticsOutputSchema = z.object({
     entityType: z.string(),
     reason: z.enum(['no_relations', 'broken_relation'])
   }))
+});
+
+// Schema for get_observation_history tool (Observation Versioning section of spec)
+export const GetObservationHistoryInputSchema = z.object({
+  entityName: z.string().min(1).describe("Name of the entity"),
+  observationId: z.string().min(1).describe("ID of the observation to retrieve history for")
+});
+
+export const GetObservationHistoryOutputSchema = z.object({
+  history: z.array(ObservationSchema).describe("Full version chain of the observation, chronologically ordered")
 });

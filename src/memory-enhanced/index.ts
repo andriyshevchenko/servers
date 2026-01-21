@@ -8,7 +8,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 // Import modular components
-import { Entity, Relation, KnowledgeGraph, SaveMemoryInput, GetAnalyticsInput } from './lib/types.js';
+import { Entity, Relation, KnowledgeGraph, SaveMemoryInput, GetAnalyticsInput, GetObservationHistoryInput } from './lib/types.js';
 import { KnowledgeGraphManager } from './lib/knowledge-graph-manager.js';
 import { 
   EntitySchema, 
@@ -16,7 +16,9 @@ import {
   SaveMemoryInputSchema, 
   SaveMemoryOutputSchema,
   GetAnalyticsInputSchema,
-  GetAnalyticsOutputSchema
+  GetAnalyticsOutputSchema,
+  GetObservationHistoryInputSchema,
+  GetObservationHistoryOutputSchema
 } from './lib/schemas.js';
 import { handleSaveMemory } from './lib/save-memory-handler.js';
 
@@ -607,6 +609,24 @@ server.registerTool(
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
       structuredContent: result as any
+    };
+  }
+);
+
+// Register get_observation_history tool
+server.registerTool(
+  "get_observation_history",
+  {
+    title: "Get Observation History",
+    description: "Retrieve the full version chain for a specific observation, showing how it evolved over time",
+    inputSchema: GetObservationHistoryInputSchema,
+    outputSchema: GetObservationHistoryOutputSchema
+  },
+  async (input: GetObservationHistoryInput) => {
+    const result = await knowledgeGraphManager.getObservationHistory(input.entityName, input.observationId);
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify({ history: result }, null, 2) }],
+      structuredContent: { history: result } as any
     };
   }
 );

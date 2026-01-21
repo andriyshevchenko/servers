@@ -3,8 +3,9 @@
  * Provides atomic creation of entities and relations with validation
  */
 
-import { Entity, Relation, SaveMemoryInput, SaveMemoryOutput, SaveMemoryEntity } from './types.js';
+import { Entity, Relation, SaveMemoryInput, SaveMemoryOutput, SaveMemoryEntity, Observation } from './types.js';
 import { validateSaveMemoryRequest, calculateQualityScore } from './validation.js';
+import { randomUUID } from 'crypto';
 
 /**
  * Saves entities and their relations to the knowledge graph atomically
@@ -34,16 +35,29 @@ export async function handleSaveMemory(
   }
   
   try {
-    // Convert SaveMemoryEntity to Entity format
-    const entities: Entity[] = input.entities.map(e => ({
-      name: e.name,
-      entityType: e.entityType,
-      observations: e.observations,
-      agentThreadId: input.threadId,
-      timestamp: timestamp,
-      confidence: e.confidence ?? 1.0,
-      importance: e.importance ?? 0.5
-    }));
+    // Convert SaveMemoryEntity to Entity format with versioned observations
+    const entities: Entity[] = input.entities.map(e => {
+      // Convert string observations to versioned Observation objects
+      const observations: Observation[] = e.observations.map(content => ({
+        id: `obs_${randomUUID()}`,
+        content: content,
+        timestamp: timestamp,
+        version: 1,  // New observations start at version 1
+        agentThreadId: input.threadId,
+        confidence: e.confidence ?? 1.0,
+        importance: e.importance ?? 0.5
+      }));
+      
+      return {
+        name: e.name,
+        entityType: e.entityType,
+        observations: observations,
+        agentThreadId: input.threadId,
+        timestamp: timestamp,
+        confidence: e.confidence ?? 1.0,
+        importance: e.importance ?? 0.5
+      };
+    });
     
     // Create all entities first
     const createdEntities = await createEntitiesFn(entities);

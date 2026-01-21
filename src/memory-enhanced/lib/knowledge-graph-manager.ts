@@ -4,7 +4,8 @@
 
 import { promises as fs } from 'fs';
 import path from 'path';
-import { Entity, Relation, KnowledgeGraph } from './types.js';
+import { Entity, Relation, KnowledgeGraph, Observation } from './types.js';
+import { randomUUID } from 'crypto';
 
 export class KnowledgeGraphManager {
   private static readonly NEGATION_WORDS = new Set(['not', 'no', 'never', 'neither', 'none', 'doesn\'t', 'don\'t', 'isn\'t', 'aren\'t']);
@@ -220,20 +221,48 @@ export class KnowledgeGraphManager {
     return newRelations;
   }
 
-  async addObservations(observations: { entityName: string; contents: string[]; agentThreadId: string; timestamp: string; confidence: number; importance: number }[]): Promise<{ entityName: string; addedObservations: string[] }[]> {
+  async addObservations(observations: { entityName: string; contents: string[]; agentThreadId: string; timestamp: string; confidence: number; importance: number }[]): Promise<{ entityName: string; addedObservations: Observation[] }[]> {
     const graph = await this.loadGraph();
     const results = observations.map(o => {
       const entity = graph.entities.find(e => e.name === o.entityName);
       if (!entity) {
         throw new Error(`Entity with name ${o.entityName} not found`);
       }
-      const newObservations = o.contents.filter(content => !entity.observations.includes(content));
-      entity.observations.push(...newObservations);
-      // Update metadata based on this operation, but keep original agentThreadId
-      // to maintain thread file consistency and avoid orphaned data
+      
+      // Check for existing observations with same content to create version chain
+      const newObservations: Observation[] = [];
+      for (const content of o.contents) {
+        // Find if there's an existing observation with this content (latest version)
+        const existingObs = entity.observations.find(obs => 
+          obs.content === content && !obs.superseded_by
+        );
+        
+        if (existingObs) {
+          // Don't add duplicate - observation with this content already exists
+          // Versioning is for UPDATES to content, not for re-asserting the same content
+          continue;
+        }
+        
+        // Create brand new observation
+        const newObs: Observation = {
+          id: `obs_${randomUUID()}`,
+          content: content,
+          timestamp: o.timestamp,
+          version: 1,
+          agentThreadId: o.agentThreadId,
+          confidence: o.confidence,
+          importance: o.importance
+        };
+        
+        entity.observations.push(newObs);
+        newObservations.push(newObs);
+      }
+      
+      // Update entity metadata
       entity.timestamp = o.timestamp;
-      entity.confidence = o.confidence;
-      entity.importance = o.importance;
+      entity.confidence = Math.max(entity.confidence, o.confidence);
+      entity.importance = Math.max(entity.importance, o.importance);
+      
       return { entityName: o.entityName, addedObservations: newObservations };
     });
     await this.saveGraph(graph);
@@ -252,7 +281,10 @@ export class KnowledgeGraphManager {
     deletions.forEach(d => {
       const entity = graph.entities.find(e => e.name === d.entityName);
       if (entity) {
-        entity.observations = entity.observations.filter(o => !d.observations.includes(o));
+        // Delete observations by content (for backward compatibility) or by ID
+        entity.observations = entity.observations.filter(o => 
+          !d.observations.includes(o.content) && !d.observations.includes(o.id)
+        );
       }
     });
     await this.saveGraph(graph);
@@ -281,7 +313,7 @@ export class KnowledgeGraphManager {
     const filteredEntities = graph.entities.filter(e => 
       e.name.toLowerCase().includes(query.toLowerCase()) ||
       e.entityType.toLowerCase().includes(query.toLowerCase()) ||
-      e.observations.some(o => o.toLowerCase().includes(query.toLowerCase()))
+      e.observations.some(o => o.content?.toLowerCase().includes(query.toLowerCase()))
     );
   
     // Create a Set of filtered entity names for quick lookup
@@ -546,23 +578,31 @@ export class KnowledgeGraphManager {
       
       for (let i = 0; i < entity.observations.length; i++) {
         for (let j = i + 1; j < entity.observations.length; j++) {
-          const obs1 = entity.observations[i].toLowerCase();
-          const obs2 = entity.observations[j].toLowerCase();
+          const obs1Content = entity.observations[i].content.toLowerCase();
+          const obs2Content = entity.observations[j].content.toLowerCase();
+          
+          // Skip if observations are in the same version chain
+          if (entity.observations[i].supersedes === entity.observations[j].id || 
+              entity.observations[j].supersedes === entity.observations[i].id ||
+              entity.observations[i].superseded_by === entity.observations[j].id ||
+              entity.observations[j].superseded_by === entity.observations[i].id) {
+            continue;
+          }
           
           // Check for negation patterns
-          const obs1HasNegation = Array.from(KnowledgeGraphManager.NEGATION_WORDS).some(word => obs1.includes(word));
-          const obs2HasNegation = Array.from(KnowledgeGraphManager.NEGATION_WORDS).some(word => obs2.includes(word));
+          const obs1HasNegation = Array.from(KnowledgeGraphManager.NEGATION_WORDS).some(word => obs1Content.includes(word));
+          const obs2HasNegation = Array.from(KnowledgeGraphManager.NEGATION_WORDS).some(word => obs2Content.includes(word));
           
           // If one has negation and they share key words, might be a conflict
           if (obs1HasNegation !== obs2HasNegation) {
-            const words1 = obs1.split(/\s+/).filter(w => w.length > 3);
-            const words2Set = new Set(obs2.split(/\s+/).filter(w => w.length > 3));
+            const words1 = obs1Content.split(/\s+/).filter(w => w.length > 3);
+            const words2Set = new Set(obs2Content.split(/\s+/).filter(w => w.length > 3));
             const commonWords = words1.filter(w => words2Set.has(w) && !KnowledgeGraphManager.NEGATION_WORDS.has(w));
             
             if (commonWords.length >= 2) {
               entityConflicts.push({
-                obs1: entity.observations[i],
-                obs2: entity.observations[j],
+                obs1: entity.observations[i].content,
+                obs2: entity.observations[j].content,
                 reason: 'Potential contradiction with negation'
               });
             }
@@ -655,8 +695,23 @@ export class KnowledgeGraphManager {
         entity.importance = update.importance;
       }
       if (update.addObservations) {
-        const newObs = update.addObservations.filter(obs => !entity.observations.includes(obs));
-        entity.observations.push(...newObs);
+        // Filter out observations that already exist (by content)
+        const newObsContents = update.addObservations.filter(obsContent => 
+          !entity.observations.some(o => o.content === obsContent)
+        );
+        
+        // Create Observation objects for new observations
+        const newObservations: Observation[] = newObsContents.map(content => ({
+          id: `obs_${randomUUID()}`,
+          content: content,
+          timestamp: new Date().toISOString(),
+          version: 1,
+          agentThreadId: entity.agentThreadId, // Use entity's thread ID
+          confidence: update.confidence ?? entity.confidence,
+          importance: update.importance ?? entity.importance
+        }));
+        
+        entity.observations.push(...newObservations);
       }
       
       entity.timestamp = new Date().toISOString();
@@ -677,8 +732,20 @@ export class KnowledgeGraphManager {
     }
     
     // Add a special observation to mark for review
-    const flagObservation = `[FLAGGED FOR REVIEW: ${reason}${reviewer ? ` - Reviewer: ${reviewer}` : ''}]`;
-    if (!entity.observations.includes(flagObservation)) {
+    const flagContent = `[FLAGGED FOR REVIEW: ${reason}${reviewer ? ` - Reviewer: ${reviewer}` : ''}]`;
+    
+    // Check if this flag already exists (by content)
+    if (!entity.observations.some(o => o.content === flagContent)) {
+      const flagObservation: Observation = {
+        id: `obs_${randomUUID()}`,
+        content: flagContent,
+        timestamp: new Date().toISOString(),
+        version: 1,
+        agentThreadId: entity.agentThreadId,
+        confidence: 1.0, // Flag observations have full confidence
+        importance: 1.0  // Flag observations are highly important
+      };
+      
       entity.observations.push(flagObservation);
       entity.timestamp = new Date().toISOString();
       await this.saveGraph(graph);
@@ -689,7 +756,7 @@ export class KnowledgeGraphManager {
   async getFlaggedEntities(): Promise<Entity[]> {
     const graph = await this.loadGraph();
     return graph.entities.filter(e => 
-      e.observations.some(obs => obs.includes('[FLAGGED FOR REVIEW:'))
+      e.observations.some(obs => obs.content.includes('[FLAGGED FOR REVIEW:'))
     );
   }
 
@@ -908,6 +975,67 @@ export class KnowledgeGraphManager {
       most_connected,
       orphaned_entities
     };
+  }
+
+  // Observation Versioning: Get full history chain for an observation
+  async getObservationHistory(entityName: string, observationId: string): Promise<Observation[]> {
+    const graph = await this.loadGraph();
+    
+    // Find the entity
+    const entity = graph.entities.find(e => e.name === entityName);
+    if (!entity) {
+      throw new Error(`Entity '${entityName}' not found`);
+    }
+    
+    // Find the starting observation
+    const startObs = entity.observations.find(o => o.id === observationId);
+    if (!startObs) {
+      throw new Error(`Observation '${observationId}' not found in entity '${entityName}'`);
+    }
+    
+    // Build the version chain
+    const history: Observation[] = [];
+    
+    // Trace backwards to find all predecessors
+    let currentObs: Observation | undefined = startObs;
+    const visited = new Set<string>();
+    
+    while (currentObs) {
+      if (visited.has(currentObs.id)) {
+        // Circular reference protection
+        break;
+      }
+      visited.add(currentObs.id);
+      history.unshift(currentObs); // Add to beginning for chronological order
+      
+      // Find predecessor
+      if (currentObs.supersedes) {
+        currentObs = entity.observations.find(o => o.id === currentObs!.supersedes);
+      } else {
+        break;
+      }
+    }
+    
+    // Trace forwards to find all successors
+    currentObs = startObs;
+    visited.clear();
+    
+    while (currentObs && currentObs.superseded_by) {
+      if (visited.has(currentObs.superseded_by)) {
+        // Circular reference protection
+        break;
+      }
+      const successor = entity.observations.find(o => o.id === currentObs!.superseded_by);
+      if (successor) {
+        visited.add(successor.id);
+        history.push(successor);
+        currentObs = successor;
+      } else {
+        break;
+      }
+    }
+    
+    return history;
   }
 }
 

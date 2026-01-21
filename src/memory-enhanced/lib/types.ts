@@ -2,11 +2,24 @@
  * Core types for the Memory Enhanced MCP Server
  */
 
+// Observation with versioning support (Observation Versioning section of spec)
+export interface Observation {
+  id: string;              // Unique ID (e.g., "obs_001")
+  content: string;         // The fact/observation text
+  timestamp: string;       // ISO 8601 timestamp
+  version: number;         // Version number (incremented on update)
+  supersedes?: string;     // ID of previous observation (if this is an update)
+  superseded_by?: string;  // ID of observation that supersedes this one
+  agentThreadId: string;   // Thread that created this observation
+  confidence: number;      // 0-1: confidence in accuracy
+  importance: number;      // 0-1: importance for memory integrity
+}
+
 // Enhanced entity with metadata
 export interface Entity {
   name: string;
   entityType: string;
-  observations: string[];
+  observations: Observation[];  // Changed from string[] to Observation[]
   agentThreadId: string;
   timestamp: string;
   confidence: number;
@@ -101,4 +114,14 @@ export interface GetAnalyticsOutput {
     entityType: string;
     reason: 'no_relations' | 'broken_relation';
   }>;
+}
+
+// Types for get_observation_history tool (Observation Versioning section of spec)
+export interface GetObservationHistoryInput {
+  entityName: string;
+  observationId: string;
+}
+
+export interface GetObservationHistoryOutput {
+  history: Observation[];  // Full version chain
 }
