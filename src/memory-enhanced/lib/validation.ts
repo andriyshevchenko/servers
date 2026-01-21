@@ -21,11 +21,11 @@ import {
 function countSentences(text: string): number {
   // Patterns to ignore - technical content that contains periods but aren't sentence boundaries
   const patternsToIgnore = [
-    /https?:\/\/[^\s.,!?]+/g,                                                   // URLs (http:// or https://)
+    /https?:\/\/[^\s]+/g,                                                      // URLs (http:// or https://) - allows periods in paths
     /\b\d+\.\d+\.\d+\.\d+\b/g,                                                 // IP addresses (e.g., 192.168.1.1)
-    /\b[A-Za-z]:\\[^\s<>:"|?*]+/g,                                             // Windows paths (e.g., C:\path\to\file)
+    /\b[A-Za-z]:[\\\/](?:[^\s<>:"|?*]+(?:\s+[^\s<>:"|?*]+)*)/g,               // Windows/Unix paths (handles spaces, e.g., C:\Program Files\...)
     /\b[vV]?\d+\.\d+(\.\d+)*\b/g,                                              // Version numbers (e.g., v1.2.0, 5.4.3)
-    /\b[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?)+\b/g,  // Hostnames/domains (e.g., subdomain.domain.com)
+    /\b[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?){2,}\b/g,  // Hostnames/domains with at least 2 dots (e.g., sub.domain.com) - requires minimum length to avoid abbreviations
   ];
   
   // Replace technical patterns with placeholders to prevent false sentence detection
@@ -190,8 +190,10 @@ export function validateSaveMemoryRequest(
     const entity = entities[entityIndex];
     
     // Validate entity type and collect warnings
+    // Note: entityType is normalized in-place for consistency with existing behavior
+    // The normalized value is used throughout the rest of validation and saving
     const { normalized, warnings: typeWarnings } = normalizeEntityType(entity.entityType);
-    entity.entityType = normalized; // Apply normalization
+    entity.entityType = normalized; // Apply normalization (intentional mutation for consistency)
     warnings.push(...typeWarnings);
     
     // Validate observations (note: observations are still strings in SaveMemoryEntity input)

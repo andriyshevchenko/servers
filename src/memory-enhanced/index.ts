@@ -544,16 +544,36 @@ server.registerTool(
     
     // Add warnings to corresponding entities
     validationResult.warnings.forEach((warning: string) => {
-      // Parse entity name from warning if possible, otherwise add to first entity
+      // Parse entity type from warning if possible, otherwise add to first entity
       const entityMatch = warning.match(/EntityType '([^']+)'/);
       if (entityMatch) {
-        // Find entity by matching in warning
+        const warningEntityType = entityMatch[1];
+        let attached = false;
+        
+        // Find entity whose entityType matches the type in the warning
         for (const [index, entity] of Object.entries(entities)) {
-          const result = results.get(Number(index));
-          if (result) {
-            result.warnings.push(warning);
-            break;
+          if (entity && (entity as any).entityType === warningEntityType) {
+            const result = results.get(Number(index));
+            if (result) {
+              result.warnings.push(warning);
+              attached = true;
+              break;
+            }
           }
+        }
+        
+        // If no matching entity type found, attach to first entity as fallback
+        if (!attached) {
+          const firstResult = results.get(0);
+          if (firstResult) {
+            firstResult.warnings.push(warning);
+          }
+        }
+      } else {
+        // No entity type information in warning; attach to first entity
+        const firstResult = results.get(0);
+        if (firstResult) {
+          firstResult.warnings.push(warning);
         }
       }
     });

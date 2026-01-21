@@ -137,6 +137,27 @@ describe('Observation Validation', () => {
     expect(result.valid).toBe(true);
   });
 
+  it('should accept Windows paths with spaces correctly', () => {
+    const result = validateObservation('Log file at C:\\Program Files\\Application\\logs\\app.log contains errors');
+    expect(result.valid).toBe(true);
+  });
+
+  it('should accept URLs with file extensions like .html', () => {
+    const result = validateObservation('Documentation at https://example.com/docs/guide.html is comprehensive');
+    expect(result.valid).toBe(true);
+  });
+
+  it('should accept URLs with multiple path segments and extensions', () => {
+    const result = validateObservation('Download from https://cdn.example.com/files/v2/installer.exe for setup');
+    expect(result.valid).toBe(true);
+  });
+
+  it('should not match short abbreviations as hostnames', () => {
+    // Dr. and U.S. should not be matched as hostnames due to minimum dot requirement
+    const result = validateObservation('Dr. Smith met with U.S. representatives. Discussion was productive.');
+    expect(result.valid).toBe(true); // 2 sentences
+  });
+
   it('should accept observations with multiple technical elements', () => {
     const result = validateObservation('API v2.0 at https://api.example.com uses 192.168.1.100');
     expect(result.valid).toBe(true);
