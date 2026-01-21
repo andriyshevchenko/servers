@@ -26,6 +26,7 @@ function countSentences(text: string): number {
     /\b[A-Za-z]:[\\\/](?:[^\s<>:"|?*]+(?:\s+[^\s<>:"|?*]+)*)/g,               // Windows/Unix paths (handles spaces, e.g., C:\Program Files\...)
     /\b[vV]?\d+\.\d+(\.\d+)*\b/g,                                              // Version numbers (e.g., v1.2.0, 5.4.3)
     /\b[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?){2,}\b/g,  // Hostnames/domains with at least 2 dots (e.g., sub.domain.com) - requires minimum length to avoid abbreviations
+    /\b[A-Z][a-z]{0,3}\./g,                                                    // Common abbreviations (e.g., Dr., Mr., Mrs., Ms., Jr., Sr., etc.)
   ];
   
   // Replace technical patterns with placeholders to prevent false sentence detection
