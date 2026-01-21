@@ -99,20 +99,78 @@ const manager = new KnowledgeGraphManager('', new InMemoryStorageAdapter());
 
 ## Future: Neo4j Storage
 
-A skeleton implementation is provided in `neo4j-storage-adapter.ts` showing how Neo4j could be integrated:
+A full production implementation is provided in `neo4j-storage-adapter.ts`:
 
 ```typescript
 import { Neo4jStorageAdapter, KnowledgeGraphManager } from './index.js';
 
-// Note: Requires neo4j-driver package and implementation
+// Create Neo4j adapter
 const neo4jAdapter = new Neo4jStorageAdapter({
   uri: 'neo4j://localhost:7687',
   username: 'neo4j',
-  password: 'password'
+  password: 'password',
+  database: 'neo4j'  // Optional
 });
 
+// Initialize connection
 await neo4jAdapter.initialize();
+
+// Use with manager
 const manager = new KnowledgeGraphManager('', neo4jAdapter);
+
+// All operations now use Neo4j
+await manager.createEntities([/* ... */]);
+const graph = await manager.readGraph();
+
+// Clean up when done
+await neo4jAdapter.close();
+```
+
+### Environment-Based Configuration
+
+The server automatically detects Neo4j configuration:
+
+```bash
+# Set environment variables
+export NEO4J_URI=neo4j://localhost:7687
+export NEO4J_USERNAME=neo4j
+export NEO4J_PASSWORD=password
+export NEO4J_DATABASE=neo4j  # Optional
+
+# Start server - automatically uses Neo4j
+npx mcp-server-memory-enhanced
+```
+
+If Neo4j is not configured or connection fails, the server automatically falls back to JSONL storage.
+
+### Docker Compose Setup
+
+Use the provided `docker-compose.yml` for local development:
+
+```bash
+docker-compose up
+```
+
+This starts:
+- Neo4j 5.15.0 (with Browser at http://localhost:7474)
+- MCP Memory Enhanced Server (configured to use Neo4j)
+
+### Testing
+
+Run E2E tests with Neo4j:
+
+```bash
+# Start Neo4j
+docker-compose up -d neo4j
+
+# Run tests
+export NEO4J_URI=neo4j://localhost:7687
+export NEO4J_USERNAME=neo4j
+export NEO4J_PASSWORD=testpassword
+npm test -- neo4j-e2e.test.ts
+
+# Or use the test script
+./test-neo4j.sh
 ```
 
 ## Testing
