@@ -14,10 +14,27 @@ import {
 } from './constants.js';
 
 /**
+ * Counts actual sentences in text, ignoring periods in version numbers and decimals
+ * @param text The text to analyze
+ * @returns Number of actual sentences
+ */
+function countSentences(text: string): number {
+  // Remove version numbers (e.g., 1.2.0, v5.4.3) and decimal numbers before counting
+  // This prevents false positives where technical data is incorrectly counted as sentences
+  const cleaned = text
+    .replace(/\bv?\d+\.\d+(\.\d+)*\b/gi, 'VERSION') // version numbers like 1.2.0 or v5.4.3
+    .replace(/\b\d+\.\d+\b/g, 'NUMBER'); // decimal numbers like 3.14
+  
+  // Split on actual sentence terminators
+  const sentences = cleaned.split(SENTENCE_TERMINATORS).filter(s => s.trim().length > 0);
+  return sentences.length;
+}
+
+/**
  * Validates a single observation according to spec requirements:
  * - Min 5 characters
  * - Max 150 characters
- * - Max 2 sentences (simple count by periods)
+ * - Max 3 sentences (ignoring periods in version numbers and decimals)
  */
 export function validateObservation(obs: string): ValidationResult {
   if (obs.length < MIN_OBSERVATION_LENGTH) {
@@ -36,12 +53,12 @@ export function validateObservation(obs: string): ValidationResult {
     };
   }
   
-  const sentences = obs.split(SENTENCE_TERMINATORS).filter(s => s.trim().length > 0);
-  if (sentences.length > MAX_SENTENCES) {
+  const sentenceCount = countSentences(obs);
+  if (sentenceCount > MAX_SENTENCES) {
     return {
       valid: false,
-      error: `Too many sentences (${sentences.length}). Max ${MAX_SENTENCES}.`,
-      suggestion: `One fact per observation. Split this into ${sentences.length} separate observations.`
+      error: `Too many sentences (${sentenceCount}). Max ${MAX_SENTENCES}.`,
+      suggestion: `One fact per observation. Split this into ${sentenceCount} separate observations.`
     };
   }
   
