@@ -91,7 +91,11 @@ describe('Save Memory Handler - Integration Tests', () => {
     expect(result.success).toBe(false);
     expect(result.validation_errors).toBeDefined();
     expect(result.validation_errors!.length).toBeGreaterThan(0);
-    expect(result.validation_errors![0]).toContain('too long');
+    
+    // Check for structured error format
+    const errors = result.validation_errors as any[];
+    const errorText = JSON.stringify(errors);
+    expect(errorText).toContain('too long');
   });
 
   it('should reject request with missing relations', async () => {
@@ -115,7 +119,10 @@ describe('Save Memory Handler - Integration Tests', () => {
 
     expect(result.success).toBe(false);
     expect(result.validation_errors).toBeDefined();
-    expect(result.validation_errors![0]).toContain('must have at least 1 relation');
+    
+    const errors = result.validation_errors as any[];
+    const errorText = JSON.stringify(errors);
+    expect(errorText).toContain('must have at least 1 relation');
   });
 
   it('should reject request with non-existent relation target', async () => {
@@ -140,7 +147,10 @@ describe('Save Memory Handler - Integration Tests', () => {
 
     expect(result.success).toBe(false);
     expect(result.validation_errors).toBeDefined();
-    expect(result.validation_errors![0]).toContain('not found in request or existing entities');
+    
+    const errors = result.validation_errors as any[];
+    const errorText = JSON.stringify(errors);
+    expect(errorText).toContain('not found in request or existing entities');
   });
 
   it('should apply default confidence and importance values', async () => {
@@ -439,6 +449,155 @@ describe('Save Memory Handler - Integration Tests', () => {
 
     expect(result.success).toBe(false);
     expect(result.validation_errors).toBeDefined();
-    expect(result.validation_errors![0]).toContain('not found in request or existing entities');
+    
+    const errors = result.validation_errors as any[];
+    const errorText = JSON.stringify(errors);
+    expect(errorText).toContain('not found in request or existing entities');
+  });
+
+  describe('Detailed Validation Error Messages', () => {
+    it('should provide structured error messages with entity index and type', async () => {
+      const input: SaveMemoryInput = {
+        entities: [
+          {
+            name: 'ValidEntity',
+            entityType: 'Test',
+            observations: ['Valid observation'],
+            relations: [{ targetEntity: 'InvalidEntity', relationType: 'relates to' }]
+          },
+          {
+            name: 'InvalidEntity',
+            entityType: 'Test',
+            observations: ['a'.repeat(151)], // Too long
+            relations: [] // No relations - invalid
+          }
+        ],
+        threadId: 'test-thread-detailed-errors'
+      };
+
+      const result = await handleSaveMemory(
+        input,
+        (entities) => manager.createEntities(entities),
+        (relations) => manager.createRelations(relations),
+        (threadId) => manager.getEntityNamesInThread(threadId)
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.validation_errors).toBeDefined();
+      expect(Array.isArray(result.validation_errors)).toBe(true);
+      
+      // Should have structured error format
+      const errors = result.validation_errors as any[];
+      expect(errors.length).toBeGreaterThan(0);
+      
+      // Check structure of first error
+      const firstError = errors[0];
+      expect(firstError).toHaveProperty('entity_index');
+      expect(firstError).toHaveProperty('entity_name');
+      expect(firstError).toHaveProperty('entity_type');
+      expect(firstError).toHaveProperty('errors');
+      expect(Array.isArray(firstError.errors)).toBe(true);
+    });
+
+    it('should include observation preview in error details', async () => {
+      const longObservation = 'This is a very long observation that exceeds the maximum allowed length for observations in the system. It keeps going and going to make sure it is definitely over the 150 character limit that is enforced.';
+      const input: SaveMemoryInput = {
+        entities: [
+          {
+            name: 'TestEntity',
+            entityType: 'Service',
+            observations: [longObservation],
+            relations: [{ targetEntity: 'TestEntity', relationType: 'self-reference' }]
+          }
+        ],
+        threadId: 'test-thread-obs-preview'
+      };
+
+      const result = await handleSaveMemory(
+        input,
+        (entities) => manager.createEntities(entities),
+        (relations) => manager.createRelations(relations)
+      );
+
+      expect(result.success).toBe(false);
+      const errors = result.validation_errors as any[];
+      
+      // Should include observation preview
+      const errorWithObs = errors.find((e: any) => e.observations && e.observations.length > 0);
+      expect(errorWithObs).toBeDefined();
+      if (errorWithObs) {
+        expect(errorWithObs.observations[0]).toContain('This is a very long observation');
+        expect(errorWithObs.observations[0].length).toBeLessThanOrEqual(53); // 50 chars + "..."
+      }
+    });
+
+    it('should collect multiple errors for the same entity', async () => {
+      const input: SaveMemoryInput = {
+        entities: [
+          {
+            name: 'MultiErrorEntity',
+            entityType: 'Test',
+            observations: ['a'.repeat(151), 'First. Second. Third. Fourth.'], // One too long, one too many sentences
+            relations: [] // No relations - invalid
+          }
+        ],
+        threadId: 'test-thread-multi-errors'
+      };
+
+      const result = await handleSaveMemory(
+        input,
+        (entities) => manager.createEntities(entities),
+        (relations) => manager.createRelations(relations)
+      );
+
+      expect(result.success).toBe(false);
+      const errors = result.validation_errors as any[];
+      expect(errors.length).toBeGreaterThan(0);
+      
+      // Should have multiple errors for the same entity
+      const entityError = errors.find((e: any) => e.entity_name === 'MultiErrorEntity');
+      expect(entityError).toBeDefined();
+      expect(entityError.errors.length).toBeGreaterThanOrEqual(3); // obs1 too long, obs2 too many sentences, no relations
+    });
+
+    it('should provide entity_index to help identify which entity failed', async () => {
+      const input: SaveMemoryInput = {
+        entities: [
+          {
+            name: 'Entity1',
+            entityType: 'Test',
+            observations: ['Valid'],
+            relations: [{ targetEntity: 'Entity2', relationType: 'relates to' }]
+          },
+          {
+            name: 'Entity2',
+            entityType: 'Test',
+            observations: ['x'.repeat(151)], // Invalid
+            relations: [{ targetEntity: 'Entity1', relationType: 'relates to' }]
+          },
+          {
+            name: 'Entity3',
+            entityType: 'Test',
+            observations: ['Valid'],
+            relations: [{ targetEntity: 'Entity1', relationType: 'relates to' }]
+          }
+        ],
+        threadId: 'test-thread-index'
+      };
+
+      const result = await handleSaveMemory(
+        input,
+        (entities) => manager.createEntities(entities),
+        (relations) => manager.createRelations(relations)
+      );
+
+      expect(result.success).toBe(false);
+      const errors = result.validation_errors as any[];
+      
+      // Find the error for Entity2
+      const entity2Error = errors.find((e: any) => e.entity_name === 'Entity2');
+      expect(entity2Error).toBeDefined();
+      expect(entity2Error.entity_index).toBe(1); // Second entity (0-indexed)
+    });
   });
 });

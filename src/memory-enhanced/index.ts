@@ -170,10 +170,35 @@ server.registerTool(
         structuredContent: result as any
       };
     } else {
+      // Format validation errors for display
+      let errorText = '✗ Validation failed:\n\n';
+      
+      if (result.validation_errors) {
+        if (Array.isArray(result.validation_errors) && result.validation_errors.length > 0) {
+          // Check if structured errors
+          if (typeof result.validation_errors[0] === 'object') {
+            const structuredErrors = result.validation_errors as any[];
+            errorText += structuredErrors.map(err => {
+              let msg = `Entity #${err.entity_index} "${err.entity_name}" (${err.entity_type}):\n`;
+              err.errors.forEach((e: string) => msg += `  - ${e}\n`);
+              if (err.observations && err.observations.length > 0) {
+                msg += `  Observations: ${err.observations.join(', ')}\n`;
+              }
+              return msg;
+            }).join('\n');
+          } else {
+            // Fallback to string errors
+            errorText += result.validation_errors.join('\n');
+          }
+        }
+      }
+      
+      errorText += '\nFix all validation errors and retry. All entities must be valid to maintain memory integrity.';
+      
       return {
         content: [{ 
           type: "text" as const, 
-          text: `✗ Validation failed:\n${result.validation_errors?.join('\n')}` 
+          text: errorText
         }],
         structuredContent: result as any,
         isError: true

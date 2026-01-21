@@ -148,7 +148,14 @@ export function normalizeEntityType(entityType: string): { normalized: string; w
  */
 export interface SaveMemoryValidationResult {
   valid: boolean;
-  errors: Array<{ entity: string; error: string; suggestion?: string }>;
+  errors: Array<{ 
+    entity: string; 
+    entityIndex: number;
+    entityType: string;
+    error: string; 
+    suggestion?: string;
+    observationPreview?: string; // First 50 chars of problematic observation
+  }>;
   warnings: string[];
 }
 
@@ -161,13 +168,22 @@ export function validateSaveMemoryRequest(
   entities: SaveMemoryEntity[],
   existingEntityNames?: Set<string>
 ): SaveMemoryValidationResult {
-  const errors: Array<{ entity: string; error: string; suggestion?: string }> = [];
+  const errors: Array<{ 
+    entity: string; 
+    entityIndex: number;
+    entityType: string;
+    error: string; 
+    suggestion?: string;
+    observationPreview?: string;
+  }> = [];
   const warnings: string[] = [];
   
   // Collect all entity names for relation validation
   const entityNames = new Set(entities.map(e => e.name));
   
-  for (const entity of entities) {
+  for (let entityIndex = 0; entityIndex < entities.length; entityIndex++) {
+    const entity = entities[entityIndex];
+    
     // Validate entity type and collect warnings
     const { normalized, warnings: typeWarnings } = normalizeEntityType(entity.entityType);
     entity.entityType = normalized; // Apply normalization
@@ -179,8 +195,11 @@ export function validateSaveMemoryRequest(
       if (!obsResult.valid) {
         errors.push({
           entity: entity.name,
+          entityIndex: entityIndex,
+          entityType: entity.entityType,
           error: `Observation ${i + 1}: ${obsResult.error}`,
-          suggestion: obsResult.suggestion
+          suggestion: obsResult.suggestion,
+          observationPreview: entity.observations[i].substring(0, 50) + (entity.observations[i].length > 50 ? '...' : '')
         });
       }
     }
@@ -190,6 +209,8 @@ export function validateSaveMemoryRequest(
     if (!relResult.valid) {
       errors.push({
         entity: entity.name,
+        entityIndex: entityIndex,
+        entityType: entity.entityType,
         error: relResult.error || 'Invalid relations',
         suggestion: relResult.suggestion
       });
@@ -200,6 +221,8 @@ export function validateSaveMemoryRequest(
     if (!targetResult.valid) {
       errors.push({
         entity: entity.name,
+        entityIndex: entityIndex,
+        entityType: entity.entityType,
         error: targetResult.error || 'Invalid relation target',
         suggestion: targetResult.suggestion
       });
