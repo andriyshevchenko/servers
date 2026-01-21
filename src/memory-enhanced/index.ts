@@ -727,7 +727,7 @@ server.registerTool(
     title: "Get Validation Rules for Memory Tools",
     description: "Returns comprehensive validation rules and constraints for all memory tool parameters. Use this tool to understand what values are acceptable before calling other tools, reducing validation errors.",
     inputSchema: {},
-    outputSchema: {
+    outputSchema: z.object({
       rules: z.object({
         observations: z.object({
           min_length: z.number().describe("Minimum observation length in characters"),
@@ -770,7 +770,7 @@ server.registerTool(
         }),
         best_practices: z.array(z.string())
       })
-    }
+    })
   },
   async () => {
     const rules = {
