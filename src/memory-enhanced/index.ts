@@ -153,7 +153,8 @@ server.registerTool(
     const result = await handleSaveMemory(
       input as SaveMemoryInput,
       (entities) => knowledgeGraphManager.createEntities(entities),
-      (relations) => knowledgeGraphManager.createRelations(relations)
+      (relations) => knowledgeGraphManager.createRelations(relations),
+      (threadId) => knowledgeGraphManager.getEntityNamesInThread(threadId)
     );
     
     if (result.success) {

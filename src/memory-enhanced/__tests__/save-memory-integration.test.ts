@@ -134,12 +134,13 @@ describe('Save Memory Handler - Integration Tests', () => {
     const result = await handleSaveMemory(
       input,
       (entities) => manager.createEntities(entities),
-      (relations) => manager.createRelations(relations)
+      (relations) => manager.createRelations(relations),
+      (threadId) => manager.getEntityNamesInThread(threadId)
     );
 
     expect(result.success).toBe(false);
     expect(result.validation_errors).toBeDefined();
-    expect(result.validation_errors![0]).toContain('not found in request');
+    expect(result.validation_errors![0]).toContain('not found in request or existing entities');
   });
 
   it('should apply default confidence and importance values', async () => {
@@ -358,5 +359,86 @@ describe('Save Memory Handler - Integration Tests', () => {
     expect(lowResult.success).toBe(true);
     expect(highResult.success).toBe(true);
     expect(highResult.quality_score).toBeGreaterThan(lowResult.quality_score);
+  });
+
+  it('should allow incremental building with cross-thread entity references', async () => {
+    // First save: Create ServiceA
+    const firstInput: SaveMemoryInput = {
+      entities: [
+        {
+          name: 'ServiceA',
+          entityType: 'Service',
+          observations: ['Main API service'],
+          relations: [{ targetEntity: 'ServiceA', relationType: 'self-reference' }] // Self-reference to satisfy relation requirement
+        }
+      ],
+      threadId: 'test-thread-incremental'
+    };
+
+    const firstResult = await handleSaveMemory(
+      firstInput,
+      (entities) => manager.createEntities(entities),
+      (relations) => manager.createRelations(relations),
+      (threadId) => manager.getEntityNamesInThread(threadId)
+    );
+
+    expect(firstResult.success).toBe(true);
+    expect(firstResult.created.entities).toBe(1);
+
+    // Second save: Create ServiceB that references ServiceA (cross-thread reference)
+    const secondInput: SaveMemoryInput = {
+      entities: [
+        {
+          name: 'ServiceB',
+          entityType: 'Service',
+          observations: ['Depends on ServiceA'],
+          relations: [{ targetEntity: 'ServiceA', relationType: 'depends on' }] // References entity from first save
+        }
+      ],
+      threadId: 'test-thread-incremental'
+    };
+
+    const secondResult = await handleSaveMemory(
+      secondInput,
+      (entities) => manager.createEntities(entities),
+      (relations) => manager.createRelations(relations),
+      (threadId) => manager.getEntityNamesInThread(threadId)
+    );
+
+    expect(secondResult.success).toBe(true);
+    expect(secondResult.created.entities).toBe(1);
+
+    // Verify the graph contains both entities and their relation
+    const graph = await manager.readGraph();
+    expect(graph.entities.some(e => e.name === 'ServiceA')).toBe(true);
+    expect(graph.entities.some(e => e.name === 'ServiceB')).toBe(true);
+    expect(graph.relations.some(r => 
+      r.from === 'ServiceB' && r.to === 'ServiceA' && r.relationType === 'depends on'
+    )).toBe(true);
+  });
+
+  it('should reject cross-thread reference to non-existent entity', async () => {
+    const input: SaveMemoryInput = {
+      entities: [
+        {
+          name: 'NewEntity',
+          entityType: 'Test',
+          observations: ['References non-existent entity'],
+          relations: [{ targetEntity: 'DoesNotExist', relationType: 'relates to' }]
+        }
+      ],
+      threadId: 'test-thread-nonexistent'
+    };
+
+    const result = await handleSaveMemory(
+      input,
+      (entities) => manager.createEntities(entities),
+      (relations) => manager.createRelations(relations),
+      (threadId) => manager.getEntityNamesInThread(threadId)
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.validation_errors).toBeDefined();
+    expect(result.validation_errors![0]).toContain('not found in request or existing entities');
   });
 });

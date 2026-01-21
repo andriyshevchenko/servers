@@ -90,18 +90,25 @@ export function validateEntityRelations(entity: SaveMemoryEntity): ValidationRes
 }
 
 /**
- * Validates that relation targets exist in the same request
+ * Validates that relation targets exist in the same request or in existing entities
+ * @param entity The entity whose relations to validate
+ * @param allEntityNames Set of entity names in the current request
+ * @param existingEntityNames Optional set of entity names that already exist in storage (for cross-thread references)
  */
 export function validateRelationTargets(
   entity: SaveMemoryEntity, 
-  allEntityNames: Set<string>
+  allEntityNames: Set<string>,
+  existingEntityNames?: Set<string>
 ): ValidationResult {
   for (const relation of entity.relations) {
-    if (!allEntityNames.has(relation.targetEntity)) {
+    const targetInCurrentBatch = allEntityNames.has(relation.targetEntity);
+    const targetInExisting = existingEntityNames?.has(relation.targetEntity) ?? false;
+    
+    if (!targetInCurrentBatch && !targetInExisting) {
       return {
         valid: false,
-        error: `Target entity '${relation.targetEntity}' not found in request`,
-        suggestion: `targetEntity must reference another entity in the same save_memory call`
+        error: `Target entity '${relation.targetEntity}' not found in request or existing entities`,
+        suggestion: `targetEntity must reference another entity in the same save_memory call or an existing entity`
       };
     }
   }
@@ -145,8 +152,14 @@ export interface SaveMemoryValidationResult {
   warnings: string[];
 }
 
+/**
+ * Validates all aspects of a save_memory request
+ * @param entities The entities to validate
+ * @param existingEntityNames Optional set of entity names that already exist in storage (for cross-thread references)
+ */
 export function validateSaveMemoryRequest(
-  entities: SaveMemoryEntity[]
+  entities: SaveMemoryEntity[],
+  existingEntityNames?: Set<string>
 ): SaveMemoryValidationResult {
   const errors: Array<{ entity: string; error: string; suggestion?: string }> = [];
   const warnings: string[] = [];
@@ -182,8 +195,8 @@ export function validateSaveMemoryRequest(
       });
     }
     
-    // Validate relation targets
-    const targetResult = validateRelationTargets(entity, entityNames);
+    // Validate relation targets (now supports cross-thread references)
+    const targetResult = validateRelationTargets(entity, entityNames, existingEntityNames);
     if (!targetResult.valid) {
       errors.push({
         entity: entity.name,

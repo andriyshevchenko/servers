@@ -15,12 +15,24 @@ import { randomUUID } from 'crypto';
 export async function handleSaveMemory(
   input: SaveMemoryInput,
   createEntitiesFn: (entities: Entity[]) => Promise<Entity[]>,
-  createRelationsFn: (relations: Relation[]) => Promise<Relation[]>
+  createRelationsFn: (relations: Relation[]) => Promise<Relation[]>,
+  getExistingEntityNamesFn?: (threadId: string) => Promise<Set<string>>
 ): Promise<SaveMemoryOutput> {
   const timestamp = new Date().toISOString();
   
-  // Validate the entire request
-  const validationResult = validateSaveMemoryRequest(input.entities);
+  // Get existing entity names for cross-thread reference validation
+  let existingEntityNames: Set<string> | undefined;
+  if (getExistingEntityNamesFn) {
+    try {
+      existingEntityNames = await getExistingEntityNamesFn(input.threadId);
+    } catch (error) {
+      // If we can't get existing entities, proceed without cross-thread validation
+      console.warn(`Failed to get existing entities for thread ${input.threadId}:`, error);
+    }
+  }
+  
+  // Validate the entire request (with cross-thread entity reference support)
+  const validationResult = validateSaveMemoryRequest(input.entities, existingEntityNames);
   
   if (!validationResult.valid) {
     // Return validation errors

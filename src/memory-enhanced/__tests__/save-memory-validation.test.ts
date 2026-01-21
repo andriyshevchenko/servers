@@ -184,7 +184,7 @@ describe('Entity Relations Validation', () => {
 });
 
 describe('Relation Target Validation', () => {
-  it('should pass when all target entities exist', () => {
+  it('should pass when all target entities exist in current batch', () => {
     const entity: SaveMemoryEntity = {
       name: 'Entity1',
       entityType: 'Test',
@@ -198,7 +198,7 @@ describe('Relation Target Validation', () => {
     expect(result.valid).toBe(true);
   });
 
-  it('should reject when target entity does not exist', () => {
+  it('should reject when target entity does not exist in batch or existing entities', () => {
     const entity: SaveMemoryEntity = {
       name: 'Entity1',
       entityType: 'Test',
@@ -210,7 +210,38 @@ describe('Relation Target Validation', () => {
     const entityNames = new Set(['Entity1', 'Entity2']);
     const result = validateRelationTargets(entity, entityNames);
     expect(result.valid).toBe(false);
-    expect(result.error).toContain('not found in request');
+    expect(result.error).toContain('not found in request or existing entities');
+  });
+
+  it('should pass when target entity exists in existing entities (cross-thread reference)', () => {
+    const entity: SaveMemoryEntity = {
+      name: 'Entity1',
+      entityType: 'Test',
+      observations: ['Test'],
+      relations: [
+        { targetEntity: 'ExistingEntity', relationType: 'relates to' }
+      ]
+    };
+    const entityNames = new Set(['Entity1']);
+    const existingEntityNames = new Set(['ExistingEntity', 'AnotherEntity']);
+    const result = validateRelationTargets(entity, entityNames, existingEntityNames);
+    expect(result.valid).toBe(true);
+  });
+
+  it('should pass when some targets are in batch and some in existing entities', () => {
+    const entity: SaveMemoryEntity = {
+      name: 'Entity1',
+      entityType: 'Test',
+      observations: ['Test'],
+      relations: [
+        { targetEntity: 'Entity2', relationType: 'relates to' },
+        { targetEntity: 'ExistingEntity', relationType: 'depends on' }
+      ]
+    };
+    const entityNames = new Set(['Entity1', 'Entity2']);
+    const existingEntityNames = new Set(['ExistingEntity']);
+    const result = validateRelationTargets(entity, entityNames, existingEntityNames);
+    expect(result.valid).toBe(true);
   });
 });
 

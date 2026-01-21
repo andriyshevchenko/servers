@@ -258,6 +258,25 @@ export class KnowledgeGraphManager {
     };
   }
 
+  /**
+   * Get names of all entities in a specific thread (for cross-thread reference validation)
+   * @param threadId The thread ID to query
+   * @returns Set of entity names that exist in the thread
+   */
+  async getEntityNamesInThread(threadId: string): Promise<Set<string>> {
+    const graph = await this.storage.loadGraph();
+    const entityNames = new Set<string>();
+    
+    // Return all entities in the graph that can be referenced
+    // This allows incremental building: entities from previous save_memory calls
+    // can be referenced in new calls, enabling cross-save entity relations
+    for (const entity of graph.entities) {
+      entityNames.add(entity.name);
+    }
+    
+    return entityNames;
+  }
+
   // Enhancement 1: Memory Statistics & Insights
   async getMemoryStats(): Promise<{
     entityCount: number;
