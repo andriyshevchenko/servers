@@ -11,7 +11,7 @@ AI agents attempting to document technical debugging sessions face significant f
 1. **Sentence Detection Breaks on Technical Content**
    - URLs containing `://` are counted as multiple sentences
    - Hostnames like `ni-internal-dev.servicebus.windows.net` trigger sentence boundary detection
-   - Example that failed validation: `"URL: https://dvdat-uks-01-es.develastic.nidemo.com/"` (counted as 4 sentences)
+   - Example that failed validation: `"URL: https://abc-abc-abc.develastic.demo.com/"` (counted as 4 sentences)
 
 2. **150-Character Limit Too Restrictive**
    - Technical observations often need more space
@@ -321,3 +321,4 @@ This aligns with database ACID principles - atomicity is a feature, not a limita
 **Priority Level**: P1 - Blocking adoption by AI agents for technical documentation  
 **Estimated Effort**: 2-3 days (all solutions are lightweight, no dependencies)  
 **Impact**: High - Enables primary use case (technical session documentation)
+
