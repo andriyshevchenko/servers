@@ -158,6 +158,12 @@ describe('Observation Validation', () => {
     expect(result.valid).toBe(true); // 2 sentences
   });
 
+  it('should handle three or more letter abbreviations', () => {
+    // U.S.A., P.D.F., I.B.M. should not be treated as sentence boundaries
+    const result = validateObservation('Files in U.S.A. use P.D.F. format. I.B.M. systems comply.');
+    expect(result.valid).toBe(true); // 2 sentences
+  });
+
   it('should accept observations with multiple technical elements', () => {
     const result = validateObservation('API v2.0 at https://api.example.com uses 192.168.1.100');
     expect(result.valid).toBe(true);

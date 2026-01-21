@@ -259,9 +259,8 @@ export class KnowledgeGraphManager {
   }
 
   /**
-   * Get names of all entities that can be referenced in relations
-   * @param threadId The thread ID (accepted for API consistency but not used for filtering)
-   * @returns Set of entity names that exist in the graph
+   * Get names of all entities that can be referenced in relations.
+   * @returns Set of entity names that exist in the graph.
    * 
    * Note: Returns ALL entities globally because entity names are globally unique across
    * all threads in the collaborative knowledge graph (by design - see createEntities).
@@ -269,7 +268,7 @@ export class KnowledgeGraphManager {
    * building and cross-thread collaboration. Thread-specific filtering is not needed
    * since entity names cannot conflict across threads.
    */
-  async getEntityNamesInThread(threadId: string): Promise<Set<string>> {
+  async getAllEntityNames(): Promise<Set<string>> {
     const graph = await this.storage.loadGraph();
     const entityNames = new Set<string>();
     
@@ -281,6 +280,20 @@ export class KnowledgeGraphManager {
     }
     
     return entityNames;
+  }
+
+  /**
+   * @deprecated Use {@link getAllEntityNames} instead.
+   * 
+   * This method is kept for backward compatibility. It accepts a threadId parameter
+   * for API consistency but does not use it for filtering; it returns the same
+   * global set of entity names as {@link getAllEntityNames}.
+   * 
+   * @param threadId The thread ID (accepted but not used)
+   * @returns Set of entity names that exist in the graph
+   */
+  async getEntityNamesInThread(threadId: string): Promise<Set<string>> {
+    return this.getAllEntityNames();
   }
 
   /**

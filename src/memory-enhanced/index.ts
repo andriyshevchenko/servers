@@ -527,7 +527,7 @@ server.registerTool(
       results.set(index, {
         index: index,
         name: entity.name,
-        type: entity.entityType,
+        type: originalEntityTypes[index],  // Use original type, not normalized
         valid: true,
         errors: [],
         warnings: []
