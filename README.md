@@ -56,7 +56,7 @@ The server stores data in separate JSONL files per agent thread:
 
 ### ⭐ Recommended Tool (New)
 1. **save_memory**: **[RECOMMENDED]** Unified tool for creating entities and relations atomically with server-side validation
-   - Enforces observation limits (max 150 chars, 3 sentences per observation, ignoring periods in version numbers)
+   - Enforces observation limits (max 300 chars, 3 sentences per observation, ignoring periods in version numbers)
    - Requires at least 1 relation per entity (prevents orphaned nodes)
    - Free-form entity types with soft normalization
    - Atomic transactions (all-or-nothing)
@@ -77,38 +77,40 @@ The server stores data in separate JSONL files per agent thread:
 8. **search_nodes**: Search entities by name, type, or observation content
 9. **open_nodes**: Retrieve specific entities by name
 10. **query_nodes**: Advanced querying with range-based filtering by timestamp, confidence, and importance
+11. **list_entities**: List entities with optional filtering by type and name pattern for quick discovery
+12. **validate_memory**: Validate entities without saving (dry-run) - check for errors before attempting save_memory
 
 ### Memory Management & Insights
-11. **get_analytics**: **[NEW]** Get simple, LLM-friendly analytics about your knowledge graph
+13. **get_analytics**: **[NEW]** Get simple, LLM-friendly analytics about your knowledge graph
     - Recent changes (last 10 entities)
     - Top important entities (by importance score)
     - Most connected entities (by relation count)
     - Orphaned entities (quality check)
-12. **get_observation_history**: **[NEW]** Retrieve version history for observations
+14. **get_observation_history**: **[NEW]** Retrieve version history for observations
     - Track how observations evolve over time
     - View complete version chains
     - Supports rollback by viewing previous versions
-13. **get_memory_stats**: Get comprehensive statistics (entity counts, thread activity, avg confidence/importance, recent activity)
-14. **get_recent_changes**: Retrieve entities and relations created/modified since a specific timestamp
-15. **prune_memory**: Remove old or low-importance entities to manage memory size
-16. **bulk_update**: Efficiently update multiple entities at once (confidence, importance, observations)
-17. **list_conversations**: List all available agent threads (conversations) with metadata including entity counts, relation counts, and activity timestamps
+15. **get_memory_stats**: Get comprehensive statistics (entity counts, thread activity, avg confidence/importance, recent activity)
+16. **get_recent_changes**: Retrieve entities and relations created/modified since a specific timestamp
+17. **prune_memory**: Remove old or low-importance entities to manage memory size
+18. **bulk_update**: Efficiently update multiple entities at once (confidence, importance, observations)
+19. **list_conversations**: List all available agent threads (conversations) with metadata including entity counts, relation counts, and activity timestamps
 
 ### Relationship Intelligence
-16. **find_relation_path**: Find the shortest path of relationships between two entities (useful for "how are they connected?")
-17. **get_context**: Retrieve entities and relations related to specified entities up to a certain depth
+20. **find_relation_path**: Find the shortest path of relationships between two entities (useful for "how are they connected?")
+21. **get_context**: Retrieve entities and relations related to specified entities up to a certain depth
 
 ### Quality & Review
-18. **detect_conflicts**: Detect potentially conflicting observations using pattern matching and negation detection
-19. **flag_for_review**: Mark entities for human review with a specific reason (Human-in-the-Loop)
-20. **get_flagged_entities**: Retrieve all entities flagged for review
+22. **detect_conflicts**: Detect potentially conflicting observations using pattern matching and negation detection
+23. **flag_for_review**: Mark entities for human review with a specific reason (Human-in-the-Loop)
+24. **get_flagged_entities**: Retrieve all entities flagged for review
 
 ## Usage
 
 ### Installation
 
 ```bash
-npm install @modelcontextprotocol/server-memory-enhanced
+npm install server-memory-enhanced
 ```
 
 ### Running the Server
@@ -165,7 +167,7 @@ Configure the server in your Claude Desktop configuration with Neo4j:
   "mcpServers": {
     "memory-enhanced": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-memory-enhanced"],
+      "args": ["-y", "mcp-server-memory-enhanced"],
       "env": {
         "NEO4J_URI": "neo4j://localhost:7687",
         "NEO4J_USERNAME": "neo4j",
@@ -195,7 +197,7 @@ The `save_memory` tool is the recommended way to create entities and relations. 
 1. **Atomic Observations**: Each observation should be a single, atomic fact
    - ✅ Good: `"Works at Google"`, `"Lives in San Francisco"`
    - ❌ Bad: `"Works at Google and lives in San Francisco and has a PhD in Computer Science"`
-   - **Max length**: 150 characters per observation
+   - **Max length**: 300 characters per observation
    - **Max sentences**: 3 sentences per observation (technical content with version numbers supported)
 
 2. **Mandatory Relations**: Every entity must connect to at least one other entity
@@ -209,9 +211,9 @@ The `save_memory` tool is the recommended way to create entities and relations. 
    - Space warning: `"API Key"` → suggests `"APIKey"`
 
 4. **Error Messages**: The tool provides clear, actionable error messages
-   - Too long: `"Observation too long (165 chars). Max 150. Suggestion: Split into multiple observations."`
+   - Too long: `"Observation too long (350 chars). Max 300. Suggestion: Split into multiple observations."`
    - No relations: `"Entity 'X' must have at least 1 relation. Suggestion: Add relations to show connections."`
-   - Too many sentences: `"Too many sentences (3). Max 2. Suggestion: Split this into 3 separate observations."`
+   - Too many sentences: `"Too many sentences (4). Max 3. Suggestion: Split this into 4 separate observations."`
 
 ### Example Usage
 
@@ -222,7 +224,7 @@ await save_memory({
     {
       name: "Alice",
       entityType: "Person",
-      observations: ["Works at Google", "Lives in SF"],  // Atomic facts, under 150 chars
+      observations: ["Works at Google", "Lives in SF"],  // Atomic facts, under 300 chars
       relations: [{ targetEntity: "Bob", relationType: "knows" }]  // At least 1 relation required
     },
     {
@@ -362,63 +364,6 @@ npm run watch
 ## License
 
 MIT
-
-## 🚀 Getting Started
-
-### Installation
-
-```bash
-npm install @modelcontextprotocol/server-memory-enhanced
-```
-
-### Running the Server
-
-```bash
-npx @modelcontextprotocol/server-memory-enhanced
-```
-
-### Configuration
-
-Set the `MEMORY_DIR_PATH` environment variable to customize the storage location:
-
-```bash
-MEMORY_DIR_PATH=/path/to/memory/directory npx @modelcontextprotocol/server-memory-enhanced
-```
-
-### Using with Claude Desktop
-
-Configure the server in your Claude Desktop configuration:
-
-```json
-{
-  "mcpServers": {
-    "memory-enhanced": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-memory-enhanced"]
-    }
-  }
-}
-```
-
-## 🛠️ Development
-
-### Build
-
-```bash
-npm run build
-```
-
-### Test
-
-```bash
-npm run test
-```
-
-### Watch Mode
-
-```bash
-npm run watch
-```
 
 ## 🤝 Contributing
 
