@@ -1,6 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { Neo4jStorageAdapter } from '../lib/neo4j-storage-adapter.js';
-import { Entity, Relation } from '../lib/types.js';
 
 /**
  * Unit tests for Neo4j Storage Adapter

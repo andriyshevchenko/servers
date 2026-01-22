@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { getInverseRelationType, hasKnownInverse, registerInverseRelation } from '../lib/relation-inverter.js';
 
 describe('Relation Inverter', () => {

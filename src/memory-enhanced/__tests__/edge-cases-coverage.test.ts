@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { KnowledgeGraphManager } from '../lib/knowledge-graph-manager.js';
 import { JsonlStorageAdapter } from '../lib/jsonl-storage-adapter.js';
 import { promises as fs } from 'fs';

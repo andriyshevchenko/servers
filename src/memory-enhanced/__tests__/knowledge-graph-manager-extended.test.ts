@@ -1,9 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { KnowledgeGraphManager } from '../lib/knowledge-graph-manager.js';
 import { JsonlStorageAdapter } from '../lib/jsonl-storage-adapter.js';
-import { Entity, Relation } from '../lib/types.js';
 import { promises as fs } from 'fs';
-import path from 'path';
 
 /**
  * Additional tests for KnowledgeGraphManager to improve coverage
@@ -96,7 +94,6 @@ describe('KnowledgeGraphManager - Extended Coverage', () => {
   describe('getRecentChanges', () => {
     it('should return entities modified after specified date', async () => {
       const oldDate = new Date('2020-01-01').toISOString();
-      const recentDate = new Date().toISOString();
 
       // Create entity with old timestamp
       await manager.createEntities([
