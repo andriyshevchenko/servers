@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { Neo4jStorageAdapter } from '../lib/neo4j-storage-adapter.js';
-import type { Entity, Relation } from '../lib/types.js';
 
 /**
  * Unit tests for Neo4j Storage Adapter
@@ -68,7 +67,7 @@ describe('Neo4j Storage Adapter - Unit Tests', () => {
       const adapter = new Neo4jStorageAdapter(config);
       
       // Should not throw
-      await expect(adapter.close()).resolves.not.toThrow();
+      await expect(adapter.close()).resolves.toBeUndefined();
     });
 
     it('should handle invalid connection in initialize', async () => {

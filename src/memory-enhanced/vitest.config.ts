@@ -14,7 +14,7 @@ export default defineConfig({
         '**/vitest.config.ts',
         '**/lib/types.ts',
         '**/lib/storage-interface.ts',
-        // Exclude index.ts from coverage because its main MCP server initialization
+        // Exclude index.ts from coverage because the main MCP server initialization
         // and tool registration logic cannot be easily tested in isolation.
         // Utility functions from this file (e.g., ensureMemoryDirectory) are covered
         // separately in index.test.ts.

@@ -86,11 +86,5 @@ describe('Server Initialization - index.ts', () => {
       const { Neo4jStorageAdapter } = await import('../index.js');
       expect(Neo4jStorageAdapter).toBeDefined();
     });
-
-    it('should export type Entity', async () => {
-      // TypeScript types are checked at compile time, this tests the import structure
-      const module = await import('../index.js');
-      expect(module).toBeDefined();
-    });
   });
 });
