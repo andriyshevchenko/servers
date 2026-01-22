@@ -84,7 +84,7 @@ The server stores data in separate JSONL files per agent thread:
 ### Installation
 
 ```bash
-npm install @modelcontextprotocol/server-memory-enhanced
+npm install server-memory-enhanced
 ```
 
 ### Running the Server
