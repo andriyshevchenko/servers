@@ -281,6 +281,7 @@ export class KnowledgeGraphManager {
 
   async addObservations(observations: { entityName: string; contents: string[]; agentThreadId: string; timestamp: string; confidence: number; importance: number }[]): Promise<{ entityName: string; addedObservations: Observation[] }[]> {
     return this.withWriteLock(async (graph) => {
+      await this.ensureInitialized();
       const results = observations.map(o => {
       const entity = this.findEntityFast(graph, o.entityName, false);
       
@@ -334,6 +335,7 @@ export class KnowledgeGraphManager {
 
   async deleteObservations(deletions: { entityName: string; observations: string[] }[]): Promise<void> {
     return this.withWriteLock(async (graph) => {
+      await this.ensureInitialized();
       deletions.forEach(d => {
         try {
           const entity = this.findEntityFast(graph, d.entityName, false);
@@ -406,6 +408,7 @@ export class KnowledgeGraphManager {
 
   async deleteRelations(relations: Relation[]): Promise<void> {
     return this.withWriteLock(async (graph) => {
+      await this.ensureInitialized();
       // Delete relations globally across all threads by matching (from, to, relationType)
       // In a collaborative knowledge graph, deletions affect all threads
       graph.relations = graph.relations.filter(r => !relations.some(delRelation => 
@@ -837,6 +840,7 @@ export class KnowledgeGraphManager {
     keepMinEntities?: number;
   }): Promise<{ removedEntities: number; removedRelations: number }> {
     return this.withWriteLock(async (graph) => {
+      await this.ensureInitialized();
       const initialEntityCount = graph.entities.length;
       const initialRelationCount = graph.relations.length;
       
@@ -893,6 +897,7 @@ export class KnowledgeGraphManager {
     addObservations?: string[];
   }[]): Promise<{ updated: number; notFound: string[] }> {
     return this.withWriteLock(async (graph) => {
+      await this.ensureInitialized();
       let updated = 0;
       const notFound: string[] = [];
       
@@ -940,6 +945,7 @@ export class KnowledgeGraphManager {
   // Enhancement 7: Flag for review (Human-in-the-Loop)
   async flagForReview(entityName: string, reason: string, reviewer?: string): Promise<void> {
     return this.withWriteLock(async (graph) => {
+      await this.ensureInitialized();
       const entity = this.findEntityFast(graph, entityName, false);
       
       // Add a special observation to mark for review
