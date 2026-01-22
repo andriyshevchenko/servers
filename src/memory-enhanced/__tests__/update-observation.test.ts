@@ -122,6 +122,7 @@ describe('updateObservation', () => {
   });
 
   it('should inherit from entity if observation does not have confidence/importance', async () => {
+    // Observation without confidence/importance to test entity inheritance
     const entities: Entity[] = [
       {
         name: 'TestEntity',

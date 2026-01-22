@@ -365,12 +365,13 @@ server.registerTool(
       confidence,
       importance
     });
+    const message = `Observation updated successfully. New version: ${updatedObservation.id} (v${updatedObservation.version})`;
     return {
-      content: [{ type: "text" as const, text: `Observation updated successfully. New version: ${updatedObservation.id} (v${updatedObservation.version})` }],
+      content: [{ type: "text" as const, text: message }],
       structuredContent: { 
         success: true, 
         updatedObservation, 
-        message: `Observation updated successfully. New version: ${updatedObservation.id} (v${updatedObservation.version})`
+        message
       }
     };
   }

@@ -133,6 +133,23 @@ export class KnowledgeGraphManager {
     await this.storage.saveGraph(graph);
   }
 
+  /**
+   * Update an existing observation by creating a new version with updated content.
+   * This maintains the version history through the supersedes/superseded_by chain.
+   * 
+   * @param params - Update parameters
+   * @param params.entityName - Name of the entity containing the observation
+   * @param params.observationId - ID of the observation to update
+   * @param params.newContent - New content for the observation
+   * @param params.agentThreadId - Agent thread ID making this update
+   * @param params.timestamp - ISO 8601 timestamp of the update
+   * @param params.confidence - Optional confidence score (0-1), inherits from old observation if not provided
+   * @param params.importance - Optional importance score (0-1), inherits from old observation if not provided
+   * @returns The newly created observation with incremented version number
+   * @throws Error if entity not found
+   * @throws Error if observation not found
+   * @throws Error if observation has already been superseded (must update latest version)
+   */
   async updateObservation(params: {
     entityName: string;
     observationId: string;
@@ -161,7 +178,8 @@ export class KnowledgeGraphManager {
       throw new Error(`Observation '${params.observationId}' has already been superseded by '${oldObs.superseded_by}'. Update the latest version instead.`);
     }
     
-    // Create new version
+    // Create new version with inheritance chain:
+    // Priority: provided params > old observation values > entity defaults
     const newObs: Observation = {
       id: `obs_${randomUUID()}`,
       content: params.newContent,
