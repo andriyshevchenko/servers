@@ -18,6 +18,18 @@ export class KnowledgeGraphManager {
   }
 
   /**
+   * Check if content contains any negation words
+   */
+  private hasNegation(content: string): boolean {
+    for (const word of KnowledgeGraphManager.NEGATION_WORDS) {
+      if (content.includes(word)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Ensure storage is initialized before any operation
    * This is called automatically by all public methods
    */
@@ -121,7 +133,8 @@ export class KnowledgeGraphManager {
     const graph = await this.storage.loadGraph();
     // Entity names are globally unique across all threads in the collaborative knowledge graph
     // This prevents duplicate entities while allowing multiple threads to contribute to the same entity
-    const newEntities = entities.filter(e => !graph.entities.some(existingEntity => existingEntity.name === e.name));
+    const existingNames = new Set(graph.entities.map(e => e.name));
+    const newEntities = entities.filter(e => !existingNames.has(e.name));
     graph.entities.push(...newEntities);
     await this.storage.saveGraph(graph);
     return newEntities;
@@ -142,11 +155,12 @@ export class KnowledgeGraphManager {
     
     // Relations are globally unique by (from, to, relationType) across all threads
     // This enables multiple threads to collaboratively build the knowledge graph
-    const newRelations = validRelations.filter(r => !graph.relations.some(existingRelation => 
-      existingRelation.from === r.from && 
-      existingRelation.to === r.to && 
-      existingRelation.relationType === r.relationType
-    ));
+    const existingRelationKeys = new Set(
+      graph.relations.map(r => `${r.from}|${r.to}|${r.relationType}`)
+    );
+    const newRelations = validRelations.filter(r => 
+      !existingRelationKeys.has(`${r.from}|${r.to}|${r.relationType}`)
+    );
     graph.relations.push(...newRelations);
     await this.storage.saveGraph(graph);
     return newRelations;
@@ -162,13 +176,14 @@ export class KnowledgeGraphManager {
       
       // Check for existing observations with same content to create version chain
       const newObservations: Observation[] = [];
+      // Build a Set of existing observation contents for efficient lookup
+      const existingContents = new Set(
+        entity.observations.filter(obs => !obs.superseded_by).map(obs => obs.content)
+      );
+      
       for (const content of o.contents) {
-        // Find if there's an existing observation with this content (latest version)
-        const existingObs = entity.observations.find(obs => 
-          obs.content === content && !obs.superseded_by
-        );
-        
-        if (existingObs) {
+        // Check if observation with this content already exists (latest version)
+        if (existingContents.has(content)) {
           // Don't add duplicate - observation with this content already exists
           // Versioning is for UPDATES to content, not for re-asserting the same content
           continue;
@@ -202,8 +217,9 @@ export class KnowledgeGraphManager {
 
   async deleteEntities(entityNames: string[]): Promise<void> {
     const graph = await this.storage.loadGraph();
-    graph.entities = graph.entities.filter(e => !entityNames.includes(e.name));
-    graph.relations = graph.relations.filter(r => !entityNames.includes(r.from) && !entityNames.includes(r.to));
+    const namesToDelete = new Set(entityNames);
+    graph.entities = graph.entities.filter(e => !namesToDelete.has(e.name));
+    graph.relations = graph.relations.filter(r => !namesToDelete.has(r.from) && !namesToDelete.has(r.to));
     await this.storage.saveGraph(graph);
   }
 
@@ -563,6 +579,21 @@ export class KnowledgeGraphManager {
       return { found: true, path: [from], relations: [] };
     }
     
+    // Build indexes for efficient relation lookup
+    const relationsFrom = new Map<string, Relation[]>();
+    const relationsTo = new Map<string, Relation[]>();
+    for (const rel of graph.relations) {
+      if (!relationsFrom.has(rel.from)) {
+        relationsFrom.set(rel.from, []);
+      }
+      relationsFrom.get(rel.from)!.push(rel);
+      
+      if (!relationsTo.has(rel.to)) {
+        relationsTo.set(rel.to, []);
+      }
+      relationsTo.get(rel.to)!.push(rel);
+    }
+    
     // BFS to find shortest path
     const queue: { entity: string; path: string[]; relations: Relation[] }[] = [
       { entity: from, path: [from], relations: [] }
@@ -577,8 +608,8 @@ export class KnowledgeGraphManager {
       }
       
       // Find all relations connected to current entity (both outgoing and incoming for bidirectional search)
-      const outgoing = graph.relations.filter(r => r.from === current.entity);
-      const incoming = graph.relations.filter(r => r.to === current.entity);
+      const outgoing = relationsFrom.get(current.entity) || [];
+      const incoming = relationsTo.get(current.entity) || [];
       
       // Check outgoing relations
       for (const rel of outgoing) {
@@ -649,8 +680,8 @@ export class KnowledgeGraphManager {
           }
           
           // Check for negation patterns
-          const obs1HasNegation = Array.from(KnowledgeGraphManager.NEGATION_WORDS).some(word => obs1Content.includes(word));
-          const obs2HasNegation = Array.from(KnowledgeGraphManager.NEGATION_WORDS).some(word => obs2Content.includes(word));
+          const obs1HasNegation = this.hasNegation(obs1Content);
+          const obs2HasNegation = this.hasNegation(obs2Content);
           
           // If one has negation and they share key words, might be a conflict
           if (obs1HasNegation !== obs2HasNegation) {
