@@ -156,10 +156,10 @@ export class KnowledgeGraphManager {
     // Relations are globally unique by (from, to, relationType) across all threads
     // This enables multiple threads to collaboratively build the knowledge graph
     const existingRelationKeys = new Set(
-      graph.relations.map(r => `${r.from}|${r.to}|${r.relationType}`)
+      graph.relations.map(r => JSON.stringify([r.from, r.to, r.relationType]))
     );
     const newRelations = validRelations.filter(r => 
-      !existingRelationKeys.has(`${r.from}|${r.to}|${r.relationType}`)
+      !existingRelationKeys.has(JSON.stringify([r.from, r.to, r.relationType]))
     );
     graph.relations.push(...newRelations);
     await this.storage.saveGraph(graph);
