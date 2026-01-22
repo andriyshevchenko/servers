@@ -380,7 +380,7 @@ describe('KnowledgeGraphManager - Enhanced with Metadata', () => {
         }
       ];
 
-      await expect(manager.addObservations(observations)).rejects.toThrow('Entity with name NonExistent not found');
+      await expect(manager.addObservations(observations)).rejects.toThrow("Entity 'NonExistent' not found");
     });
   });
 

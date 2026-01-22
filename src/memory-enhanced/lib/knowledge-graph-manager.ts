@@ -222,10 +222,7 @@ export class KnowledgeGraphManager {
   async addObservations(observations: { entityName: string; contents: string[]; agentThreadId: string; timestamp: string; confidence: number; importance: number }[]): Promise<{ entityName: string; addedObservations: Observation[] }[]> {
     const graph = await this.loadGraphCached(true);
     const results = observations.map(o => {
-      const entity = graph.entities.find(e => e.name === o.entityName);
-      if (!entity) {
-        throw new Error(`Entity with name ${o.entityName} not found`);
-      }
+      const entity = this.findEntityFast(graph, o.entityName);
       
       // Check for existing observations with same content to create version chain
       const newObservations: Observation[] = [];
@@ -277,12 +274,14 @@ export class KnowledgeGraphManager {
   async deleteObservations(deletions: { entityName: string; observations: string[] }[]): Promise<void> {
     const graph = await this.loadGraphCached(true);
     deletions.forEach(d => {
-      const entity = graph.entities.find(e => e.name === d.entityName);
-      if (entity) {
+      try {
+        const entity = this.findEntityFast(graph, d.entityName);
         // Delete observations by content (for backward compatibility) or by ID
         entity.observations = entity.observations.filter(o => 
           !d.observations.includes(o.content) && !d.observations.includes(o.id)
         );
+      } catch (error) {
+        // Entity not found - skip deletion
       }
     });
     await this.saveGraphAndInvalidate(graph);
@@ -318,7 +317,7 @@ export class KnowledgeGraphManager {
     const graph = await this.loadGraphCached(true);
     
     // Find and validate the entity and observation
-    const entity = this.findEntity(graph, params.entityName);
+    const entity = this.findEntityFast(graph, params.entityName);
     const oldObs = this.findObservation(entity, params.observationId);
     this.validateObservationNotSuperseded(oldObs);
     
@@ -857,11 +856,7 @@ export class KnowledgeGraphManager {
   // Enhancement 7: Flag for review (Human-in-the-Loop)
   async flagForReview(entityName: string, reason: string, reviewer?: string): Promise<void> {
     const graph = await this.loadGraphCached(true);
-    const entity = graph.entities.find(e => e.name === entityName);
-    
-    if (!entity) {
-      throw new Error(`Entity with name ${entityName} not found`);
-    }
+    const entity = this.findEntityFast(graph, entityName);
     
     // Add a special observation to mark for review
     const flagContent = `[FLAGGED FOR REVIEW: ${reason}${reviewer ? ` - Reviewer: ${reviewer}` : ''}]`;
