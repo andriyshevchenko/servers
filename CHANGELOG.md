@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `addObservations()` now uses reduce instead of filter+map chain
   - Removes unnecessary array allocations during duplicate detection
 - **Optimized negation word detection** - Improved word boundary matching without intermediate allocations
-  - Uses `\b\w+\b` regex for robust word extraction with punctuation handling
+  - Uses `\b[\w']+\b` regex for robust word extraction, keeping contractions (e.g., "don't") as single words
   - Checks words directly against NEGATION_WORDS Set without creating temporary Set
   - Avoids unnecessary allocations in O(n²) conflict detection loops
 - **Optimized JSONL serialization** - Direct array building eliminates spread operator overhead
