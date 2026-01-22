@@ -158,9 +158,14 @@ export class KnowledgeGraphManager {
     const existingRelationKeys = new Set(
       graph.relations.map(r => JSON.stringify([r.from, r.to, r.relationType]))
     );
-    const newRelations = validRelations.filter(r => 
-      !existingRelationKeys.has(JSON.stringify([r.from, r.to, r.relationType]))
-    );
+    // Create composite keys once per valid relation to avoid duplicate serialization
+    const validRelationsWithKeys = validRelations.map(r => ({
+      relation: r,
+      key: JSON.stringify([r.from, r.to, r.relationType])
+    }));
+    const newRelations = validRelationsWithKeys
+      .filter(item => !existingRelationKeys.has(item.key))
+      .map(item => item.relation);
     graph.relations.push(...newRelations);
     await this.storage.saveGraph(graph);
     return newRelations;
