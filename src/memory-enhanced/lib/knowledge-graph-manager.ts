@@ -18,11 +18,12 @@ export class KnowledgeGraphManager {
   }
 
   /**
-   * Check if content contains any negation words
+   * Check if content contains any negation words (using word boundary matching)
    */
   private hasNegation(content: string): boolean {
+    const words = new Set(content.toLowerCase().split(/\s+/));
     for (const word of KnowledgeGraphManager.NEGATION_WORDS) {
-      if (content.includes(word)) {
+      if (words.has(word)) {
         return true;
       }
     }
@@ -188,9 +189,15 @@ export class KnowledgeGraphManager {
       
       // Check for existing observations with same content to create version chain
       const newObservations: Observation[] = [];
-      // Build a Set of existing observation contents for efficient lookup
-      const existingContents = new Set(
-        entity.observations.filter(obs => !obs.superseded_by).map(obs => obs.content)
+      // Build a Set of existing observation contents for efficient lookup (single-pass)
+      const existingContents = entity.observations.reduce(
+        (set, obs) => {
+          if (!obs.superseded_by) {
+            set.add(obs.content);
+          }
+          return set;
+        },
+        new Set<string>()
       );
       
       for (const content of o.contents) {
