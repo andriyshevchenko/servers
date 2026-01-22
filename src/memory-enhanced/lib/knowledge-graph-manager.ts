@@ -14,10 +14,37 @@ export class KnowledgeGraphManager {
   private initializePromise: Promise<void> | null = null;
   private entityIndex: Map<string, Entity> | null = null;
   private cachedGraph: KnowledgeGraph | null = null;
+  private operationLock: Promise<void> = Promise.resolve();
   
   constructor(memoryDirPath: string, storageAdapter?: IStorageAdapter) {
     this.storage = storageAdapter || new JsonlStorageAdapter(memoryDirPath);
     // Lazy initialization - will be called on first operation
+  }
+
+  /**
+   * Acquire lock for write operations to prevent race conditions
+   * @param operation - The async operation to execute with lock
+   * @returns The result of the operation
+   */
+  private async withWriteLock<T>(operation: () => Promise<T>): Promise<T> {
+    // Wait for previous operation to complete
+    const previousLock = this.operationLock;
+    
+    // Create a new lock for this operation
+    let releaseLock: () => void;
+    this.operationLock = new Promise<void>((resolve) => {
+      releaseLock = resolve;
+    });
+    
+    try {
+      // Wait for previous operation
+      await previousLock;
+      // Execute this operation
+      return await operation();
+    } finally {
+      // Release the lock
+      releaseLock!();
+    }
   }
 
   /**
@@ -37,6 +64,8 @@ export class KnowledgeGraphManager {
    * @returns The knowledge graph
    */
   private async loadGraphCached(forceRefresh: boolean = false): Promise<KnowledgeGraph> {
+    await this.ensureInitialized();
+    
     if (!forceRefresh && this.cachedGraph) {
       return this.cachedGraph;
     }
@@ -64,6 +93,21 @@ export class KnowledgeGraphManager {
   private invalidateCache(): void {
     this.cachedGraph = null;
     this.entityIndex = null;
+  }
+
+  /**
+   * Deep clone a knowledge graph to prevent external mutations
+   * @param graph - The graph to clone
+   * @returns A deep copy of the graph
+   */
+  private deepCloneGraph(graph: KnowledgeGraph): KnowledgeGraph {
+    return {
+      entities: graph.entities.map(e => ({
+        ...e,
+        observations: e.observations.map(o => ({ ...o }))
+      })),
+      relations: graph.relations.map(r => ({ ...r }))
+    };
   }
 
   /**
@@ -184,18 +228,21 @@ export class KnowledgeGraphManager {
   }
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
-    await this.ensureInitialized();
-    const graph = await this.loadGraphCached(true); // Force refresh for mutations
-    // Entity names are globally unique across all threads in the collaborative knowledge graph
-    // This prevents duplicate entities while allowing multiple threads to contribute to the same entity
-    const newEntities = entities.filter(e => !graph.entities.some(existingEntity => existingEntity.name === e.name));
-    graph.entities.push(...newEntities);
-    await this.saveGraphAndInvalidate(graph);
-    return newEntities;
+    return this.withWriteLock(async () => {
+      await this.ensureInitialized();
+      const graph = await this.loadGraphCached(true); // Force refresh for mutations
+      // Entity names are globally unique across all threads in the collaborative knowledge graph
+      // This prevents duplicate entities while allowing multiple threads to contribute to the same entity
+      const newEntities = entities.filter(e => !graph.entities.some(existingEntity => existingEntity.name === e.name));
+      graph.entities.push(...newEntities);
+      await this.saveGraphAndInvalidate(graph);
+      return newEntities;
+    });
   }
 
   async createRelations(relations: Relation[]): Promise<Relation[]> {
-    const graph = await this.loadGraphCached(true); // Force refresh for mutations
+    return this.withWriteLock(async () => {
+      const graph = await this.loadGraphCached(true); // Force refresh for mutations
     
     // Validate that referenced entities exist
     const entityNames = new Set(graph.entities.map(e => e.name));
@@ -217,10 +264,12 @@ export class KnowledgeGraphManager {
     graph.relations.push(...newRelations);
     await this.saveGraphAndInvalidate(graph);
     return newRelations;
+    });
   }
 
   async addObservations(observations: { entityName: string; contents: string[]; agentThreadId: string; timestamp: string; confidence: number; importance: number }[]): Promise<{ entityName: string; addedObservations: Observation[] }[]> {
-    const graph = await this.loadGraphCached(true);
+    return this.withWriteLock(async () => {
+      const graph = await this.loadGraphCached(true);
     const results = observations.map(o => {
       const entity = this.findEntityFast(graph, o.entityName);
       
@@ -262,29 +311,34 @@ export class KnowledgeGraphManager {
     });
     await this.saveGraphAndInvalidate(graph);
     return results;
+    });
   }
 
   async deleteEntities(entityNames: string[]): Promise<void> {
-    const graph = await this.loadGraphCached(true);
-    graph.entities = graph.entities.filter(e => !entityNames.includes(e.name));
-    graph.relations = graph.relations.filter(r => !entityNames.includes(r.from) && !entityNames.includes(r.to));
-    await this.saveGraphAndInvalidate(graph);
+    return this.withWriteLock(async () => {
+      const graph = await this.loadGraphCached(true);
+      graph.entities = graph.entities.filter(e => !entityNames.includes(e.name));
+      graph.relations = graph.relations.filter(r => !entityNames.includes(r.from) && !entityNames.includes(r.to));
+      await this.saveGraphAndInvalidate(graph);
+    });
   }
 
   async deleteObservations(deletions: { entityName: string; observations: string[] }[]): Promise<void> {
-    const graph = await this.loadGraphCached(true);
-    deletions.forEach(d => {
-      try {
-        const entity = this.findEntityFast(graph, d.entityName);
-        // Delete observations by content (for backward compatibility) or by ID
-        entity.observations = entity.observations.filter(o => 
-          !d.observations.includes(o.content) && !d.observations.includes(o.id)
-        );
-      } catch (error) {
-        // Entity not found - skip deletion
-      }
+    return this.withWriteLock(async () => {
+      const graph = await this.loadGraphCached(true);
+      deletions.forEach(d => {
+        try {
+          const entity = this.findEntityFast(graph, d.entityName);
+          // Delete observations by content (for backward compatibility) or by ID
+          entity.observations = entity.observations.filter(o => 
+            !d.observations.includes(o.content) && !d.observations.includes(o.id)
+          );
+        } catch (error) {
+          // Entity not found - skip deletion
+        }
+      });
+      await this.saveGraphAndInvalidate(graph);
     });
-    await this.saveGraphAndInvalidate(graph);
   }
 
   /**
@@ -313,44 +367,49 @@ export class KnowledgeGraphManager {
     confidence?: number;
     importance?: number;
   }): Promise<Observation> {
-    await this.ensureInitialized();
-    const graph = await this.loadGraphCached(true);
-    
-    // Find and validate the entity and observation
-    const entity = this.findEntityFast(graph, params.entityName);
-    const oldObs = this.findObservation(entity, params.observationId);
-    this.validateObservationNotSuperseded(oldObs);
-    
-    // Create new version with inheritance chain
-    const newObs = this.createObservationVersion(oldObs, entity, params);
-    
-    // Link old observation to new one
-    oldObs.superseded_by = newObs.id;
-    
-    // Add new observation to entity
-    entity.observations.push(newObs);
-    
-    // Update entity timestamp
-    entity.timestamp = params.timestamp;
-    
-    await this.saveGraphAndInvalidate(graph);
-    return newObs;
+    return this.withWriteLock(async () => {
+      await this.ensureInitialized();
+      const graph = await this.loadGraphCached(true);
+      
+      // Find and validate the entity and observation
+      const entity = this.findEntityFast(graph, params.entityName);
+      const oldObs = this.findObservation(entity, params.observationId);
+      this.validateObservationNotSuperseded(oldObs);
+      
+      // Create new version with inheritance chain
+      const newObs = this.createObservationVersion(oldObs, entity, params);
+      
+      // Link old observation to new one
+      oldObs.superseded_by = newObs.id;
+      
+      // Add new observation to entity
+      entity.observations.push(newObs);
+      
+      // Update entity timestamp
+      entity.timestamp = params.timestamp;
+      
+      await this.saveGraphAndInvalidate(graph);
+      return newObs;
+    });
   }
 
   async deleteRelations(relations: Relation[]): Promise<void> {
-    const graph = await this.loadGraphCached(true);
-    // Delete relations globally across all threads by matching (from, to, relationType)
-    // In a collaborative knowledge graph, deletions affect all threads
-    graph.relations = graph.relations.filter(r => !relations.some(delRelation => 
-      r.from === delRelation.from && 
-      r.to === delRelation.to && 
-      r.relationType === delRelation.relationType
-    ));
-    await this.saveGraphAndInvalidate(graph);
+    return this.withWriteLock(async () => {
+      const graph = await this.loadGraphCached(true);
+      // Delete relations globally across all threads by matching (from, to, relationType)
+      // In a collaborative knowledge graph, deletions affect all threads
+      graph.relations = graph.relations.filter(r => !relations.some(delRelation => 
+        r.from === delRelation.from && 
+        r.to === delRelation.to && 
+        r.relationType === delRelation.relationType
+      ));
+      await this.saveGraphAndInvalidate(graph);
+    });
   }
 
   async readGraph(): Promise<KnowledgeGraph> {
-    return this.loadGraphCached();
+    const graph = await this.loadGraphCached();
+    return this.deepCloneGraph(graph);
   }
 
   async searchNodes(query: string): Promise<KnowledgeGraph> {
@@ -371,12 +430,14 @@ export class KnowledgeGraphManager {
       filteredEntityNames.has(r.from) && filteredEntityNames.has(r.to)
     );
   
-    const filteredGraph: KnowledgeGraph = {
-      entities: filteredEntities,
-      relations: filteredRelations,
+    // Return cloned data to prevent external mutations
+    return {
+      entities: filteredEntities.map(e => ({
+        ...e,
+        observations: e.observations.map(o => ({ ...o }))
+      })),
+      relations: filteredRelations.map(r => ({ ...r }))
     };
-  
-    return filteredGraph;
   }
 
   async openNodes(names: string[]): Promise<KnowledgeGraph> {
@@ -393,12 +454,14 @@ export class KnowledgeGraphManager {
       filteredEntityNames.has(r.from) && filteredEntityNames.has(r.to)
     );
   
-    const filteredGraph: KnowledgeGraph = {
-      entities: filteredEntities,
-      relations: filteredRelations,
+    // Return cloned data to prevent external mutations
+    return {
+      entities: filteredEntities.map(e => ({
+        ...e,
+        observations: e.observations.map(o => ({ ...o }))
+      })),
+      relations: filteredRelations.map(r => ({ ...r }))
     };
-  
-    return filteredGraph;
   }
 
   async queryNodes(filters?: {
@@ -755,50 +818,52 @@ export class KnowledgeGraphManager {
     importanceLessThan?: number;
     keepMinEntities?: number;
   }): Promise<{ removedEntities: number; removedRelations: number }> {
-    const graph = await this.loadGraphCached(true);
-    const initialEntityCount = graph.entities.length;
-    const initialRelationCount = graph.relations.length;
-    
-    // Filter entities to remove
-    let entitiesToKeep = graph.entities;
-    
-    if (options.olderThan) {
-      const cutoffDate = new Date(options.olderThan);
-      entitiesToKeep = entitiesToKeep.filter(e => new Date(e.timestamp) >= cutoffDate);
-    }
-    
-    if (options.importanceLessThan !== undefined) {
-      entitiesToKeep = entitiesToKeep.filter(e => e.importance >= options.importanceLessThan!);
-    }
-    
-    // Ensure we keep minimum entities
-    // If keepMinEntities is set and we need more entities, take from the already-filtered set
-    // sorted by importance and recency
-    if (options.keepMinEntities && entitiesToKeep.length < options.keepMinEntities) {
-      // Sort the filtered entities by importance and timestamp, keep the most important and recent
-      const sorted = [...entitiesToKeep].sort((a, b) => {
-        if (a.importance !== b.importance) return b.importance - a.importance;
-        return b.timestamp.localeCompare(a.timestamp);
-      });
-      // If we still don't have enough, we keep what we have
-      entitiesToKeep = sorted.slice(0, Math.min(options.keepMinEntities, sorted.length));
-    }
-    
-    const keptEntityNames = new Set(entitiesToKeep.map(e => e.name));
-    
-    // Remove relations that reference removed entities
-    const relationsToKeep = graph.relations.filter(r => 
-      keptEntityNames.has(r.from) && keptEntityNames.has(r.to)
-    );
-    
-    graph.entities = entitiesToKeep;
-    graph.relations = relationsToKeep;
-    await this.saveGraphAndInvalidate(graph);
-    
-    return {
-      removedEntities: initialEntityCount - entitiesToKeep.length,
-      removedRelations: initialRelationCount - relationsToKeep.length
-    };
+    return this.withWriteLock(async () => {
+      const graph = await this.loadGraphCached(true);
+      const initialEntityCount = graph.entities.length;
+      const initialRelationCount = graph.relations.length;
+      
+      // Filter entities to remove
+      let entitiesToKeep = graph.entities;
+      
+      if (options.olderThan) {
+        const cutoffDate = new Date(options.olderThan);
+        entitiesToKeep = entitiesToKeep.filter(e => new Date(e.timestamp) >= cutoffDate);
+      }
+      
+      if (options.importanceLessThan !== undefined) {
+        entitiesToKeep = entitiesToKeep.filter(e => e.importance >= options.importanceLessThan!);
+      }
+      
+      // Ensure we keep minimum entities
+      // If keepMinEntities is set and we need more entities, take from the already-filtered set
+      // sorted by importance and recency
+      if (options.keepMinEntities && entitiesToKeep.length < options.keepMinEntities) {
+        // Sort the filtered entities by importance and timestamp, keep the most important and recent
+        const sorted = [...entitiesToKeep].sort((a, b) => {
+          if (a.importance !== b.importance) return b.importance - a.importance;
+          return b.timestamp.localeCompare(a.timestamp);
+        });
+        // If we still don't have enough, we keep what we have
+        entitiesToKeep = sorted.slice(0, Math.min(options.keepMinEntities, sorted.length));
+      }
+      
+      const keptEntityNames = new Set(entitiesToKeep.map(e => e.name));
+      
+      // Remove relations that reference removed entities
+      const relationsToKeep = graph.relations.filter(r => 
+        keptEntityNames.has(r.from) && keptEntityNames.has(r.to)
+      );
+      
+      graph.entities = entitiesToKeep;
+      graph.relations = relationsToKeep;
+      await this.saveGraphAndInvalidate(graph);
+      
+      return {
+        removedEntities: initialEntityCount - entitiesToKeep.length,
+        removedRelations: initialRelationCount - relationsToKeep.length
+      };
+    });
   }
 
   // Enhancement 6: Batch operations
@@ -808,75 +873,79 @@ export class KnowledgeGraphManager {
     importance?: number;
     addObservations?: string[];
   }[]): Promise<{ updated: number; notFound: string[] }> {
-    const graph = await this.loadGraphCached(true);
-    let updated = 0;
-    const notFound: string[] = [];
-    
-    for (const update of updates) {
-      const entity = graph.entities.find(e => e.name === update.entityName);
-      if (!entity) {
-        notFound.push(update.entityName);
-        continue;
+    return this.withWriteLock(async () => {
+      const graph = await this.loadGraphCached(true);
+      let updated = 0;
+      const notFound: string[] = [];
+      
+      for (const update of updates) {
+        const entity = graph.entities.find(e => e.name === update.entityName);
+        if (!entity) {
+          notFound.push(update.entityName);
+          continue;
+        }
+        
+        if (update.confidence !== undefined) {
+          entity.confidence = update.confidence;
+        }
+        if (update.importance !== undefined) {
+          entity.importance = update.importance;
+        }
+        if (update.addObservations) {
+          // Filter out observations that already exist (by content)
+          const newObsContents = update.addObservations.filter(obsContent => 
+            !entity.observations.some(o => o.content === obsContent)
+          );
+          
+          // Create Observation objects for new observations
+          const newObservations: Observation[] = newObsContents.map(content => ({
+            id: `obs_${randomUUID()}`,
+            content: content,
+            timestamp: new Date().toISOString(),
+            version: 1,
+            agentThreadId: entity.agentThreadId, // Use entity's thread ID
+            confidence: update.confidence ?? entity.confidence,
+            importance: update.importance ?? entity.importance
+          }));
+          
+          entity.observations.push(...newObservations);
+        }
+        
+        entity.timestamp = new Date().toISOString();
+        updated++;
       }
       
-      if (update.confidence !== undefined) {
-        entity.confidence = update.confidence;
-      }
-      if (update.importance !== undefined) {
-        entity.importance = update.importance;
-      }
-      if (update.addObservations) {
-        // Filter out observations that already exist (by content)
-        const newObsContents = update.addObservations.filter(obsContent => 
-          !entity.observations.some(o => o.content === obsContent)
-        );
-        
-        // Create Observation objects for new observations
-        const newObservations: Observation[] = newObsContents.map(content => ({
-          id: `obs_${randomUUID()}`,
-          content: content,
-          timestamp: new Date().toISOString(),
-          version: 1,
-          agentThreadId: entity.agentThreadId, // Use entity's thread ID
-          confidence: update.confidence ?? entity.confidence,
-          importance: update.importance ?? entity.importance
-        }));
-        
-        entity.observations.push(...newObservations);
-      }
-      
-      entity.timestamp = new Date().toISOString();
-      updated++;
-    }
-    
-    await this.saveGraphAndInvalidate(graph);
-    return { updated, notFound };
+      await this.saveGraphAndInvalidate(graph);
+      return { updated, notFound };
+    });
   }
 
   // Enhancement 7: Flag for review (Human-in-the-Loop)
   async flagForReview(entityName: string, reason: string, reviewer?: string): Promise<void> {
-    const graph = await this.loadGraphCached(true);
-    const entity = this.findEntityFast(graph, entityName);
-    
-    // Add a special observation to mark for review
-    const flagContent = `[FLAGGED FOR REVIEW: ${reason}${reviewer ? ` - Reviewer: ${reviewer}` : ''}]`;
-    
-    // Check if this flag already exists (by content)
-    if (!entity.observations.some(o => o.content === flagContent)) {
-      const flagObservation: Observation = {
-        id: `obs_${randomUUID()}`,
-        content: flagContent,
-        timestamp: new Date().toISOString(),
-        version: 1,
-        agentThreadId: entity.agentThreadId,
-        confidence: 1.0, // Flag observations have full confidence
-        importance: 1.0  // Flag observations are highly important
-      };
+    return this.withWriteLock(async () => {
+      const graph = await this.loadGraphCached(true);
+      const entity = this.findEntityFast(graph, entityName);
       
-      entity.observations.push(flagObservation);
-      entity.timestamp = new Date().toISOString();
-      await this.saveGraphAndInvalidate(graph);
-    }
+      // Add a special observation to mark for review
+      const flagContent = `[FLAGGED FOR REVIEW: ${reason}${reviewer ? ` - Reviewer: ${reviewer}` : ''}]`;
+      
+      // Check if this flag already exists (by content)
+      if (!entity.observations.some(o => o.content === flagContent)) {
+        const flagObservation: Observation = {
+          id: `obs_${randomUUID()}`,
+          content: flagContent,
+          timestamp: new Date().toISOString(),
+          version: 1,
+          agentThreadId: entity.agentThreadId,
+          confidence: 1.0, // Flag observations have full confidence
+          importance: 1.0  // Flag observations are highly important
+        };
+        
+        entity.observations.push(flagObservation);
+        entity.timestamp = new Date().toISOString();
+        await this.saveGraphAndInvalidate(graph);
+      }
+    });
   }
 
   // Enhancement 8: Get entities flagged for review
