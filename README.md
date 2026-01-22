@@ -70,40 +70,41 @@ The server stores data in separate JSONL files per agent thread:
 1. **create_entities**: Create new entities with metadata (including importance) - **[DEPRECATED - Use save_memory]**
 2. **create_relations**: Create relationships between entities with metadata (including importance) - **[DEPRECATED - Use save_memory]**
 3. **add_observations**: Add observations to existing entities with metadata (including importance)
-4. **delete_entities**: Remove entities and cascading relations
-5. **delete_observations**: Remove specific observations
-6. **delete_relations**: Delete relationships
-7. **read_graph**: Read the entire knowledge graph
-8. **search_nodes**: Search entities by name, type, or observation content
-9. **open_nodes**: Retrieve specific entities by name
-10. **query_nodes**: Advanced querying with range-based filtering by timestamp, confidence, and importance
-11. **list_entities**: List entities with optional filtering by type and name pattern for quick discovery
-12. **validate_memory**: Validate entities without saving (dry-run) - check for errors before attempting save_memory
+4. **update_observation**: **[NEW]** Update an existing observation by creating a new version with updated content, maintaining version history
+5. **delete_entities**: Remove entities and cascading relations
+6. **delete_observations**: Remove specific observations
+7. **delete_relations**: Delete relationships
+8. **read_graph**: Read the entire knowledge graph
+9. **search_nodes**: Search entities by name, type, or observation content
+10. **open_nodes**: Retrieve specific entities by name
+11. **query_nodes**: Advanced querying with range-based filtering by timestamp, confidence, and importance
+12. **list_entities**: List entities with optional filtering by type and name pattern for quick discovery
+13. **validate_memory**: Validate entities without saving (dry-run) - check for errors before attempting save_memory
 
 ### Memory Management & Insights
-13. **get_analytics**: **[NEW]** Get simple, LLM-friendly analytics about your knowledge graph
+14. **get_analytics**: **[NEW]** Get simple, LLM-friendly analytics about your knowledge graph
     - Recent changes (last 10 entities)
     - Top important entities (by importance score)
     - Most connected entities (by relation count)
     - Orphaned entities (quality check)
-14. **get_observation_history**: **[NEW]** Retrieve version history for observations
+15. **get_observation_history**: **[NEW]** Retrieve version history for observations
     - Track how observations evolve over time
     - View complete version chains
     - Supports rollback by viewing previous versions
-15. **get_memory_stats**: Get comprehensive statistics (entity counts, thread activity, avg confidence/importance, recent activity)
-16. **get_recent_changes**: Retrieve entities and relations created/modified since a specific timestamp
-17. **prune_memory**: Remove old or low-importance entities to manage memory size
-18. **bulk_update**: Efficiently update multiple entities at once (confidence, importance, observations)
-19. **list_conversations**: List all available agent threads (conversations) with metadata including entity counts, relation counts, and activity timestamps
+16. **get_memory_stats**: Get comprehensive statistics (entity counts, thread activity, avg confidence/importance, recent activity)
+17. **get_recent_changes**: Retrieve entities and relations created/modified since a specific timestamp
+18. **prune_memory**: Remove old or low-importance entities to manage memory size
+19. **bulk_update**: Efficiently update multiple entities at once (confidence, importance, observations)
+20. **list_conversations**: List all available agent threads (conversations) with metadata including entity counts, relation counts, and activity timestamps
 
 ### Relationship Intelligence
-20. **find_relation_path**: Find the shortest path of relationships between two entities (useful for "how are they connected?")
-21. **get_context**: Retrieve entities and relations related to specified entities up to a certain depth
+21. **find_relation_path**: Find the shortest path of relationships between two entities (useful for "how are they connected?")
+22. **get_context**: Retrieve entities and relations related to specified entities up to a certain depth
 
 ### Quality & Review
-22. **detect_conflicts**: Detect potentially conflicting observations using pattern matching and negation detection
-23. **flag_for_review**: Mark entities for human review with a specific reason (Human-in-the-Loop)
-24. **get_flagged_entities**: Retrieve all entities flagged for review
+23. **detect_conflicts**: Detect potentially conflicting observations using pattern matching and negation detection
+24. **flag_for_review**: Mark entities for human review with a specific reason (Human-in-the-Loop)
+25. **get_flagged_entities**: Retrieve all entities flagged for review
 
 ## Usage
 
@@ -254,6 +255,17 @@ await get_observation_history({
   observationId: "obs_abc123"
 });
 // Returns: { history: [{ id, content, version, timestamp, supersedes, superseded_by }, ...] }
+
+// Update an existing observation (creates a new version)
+await update_observation({
+  entityName: "Alice",
+  observationId: "obs_abc123",
+  newContent: "Works at Google (Senior Engineer)",
+  agentThreadId: "conversation-001",
+  timestamp: "2024-01-20T12:00:00Z",
+  confidence: 0.95  // Optional: update confidence
+});
+// Returns: { success: true, updatedObservation: { id, content, version: 2, supersedes, ... }, message: "..." }
 
 // Query nodes with range-based filtering
 await queryNodes({

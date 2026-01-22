@@ -28,6 +28,94 @@ export class KnowledgeGraphManager {
     await this.initializePromise;
   }
 
+  /**
+   * Find an entity by name in the knowledge graph.
+   * @param graph - The knowledge graph to search
+   * @param entityName - Name of the entity to find
+   * @returns The found entity
+   * @throws Error if entity not found
+   */
+  private findEntity(graph: KnowledgeGraph, entityName: string): Entity {
+    const entity = graph.entities.find(e => e.name === entityName);
+    if (!entity) {
+      throw new Error(`Entity '${entityName}' not found`);
+    }
+    return entity;
+  }
+
+  /**
+   * Find an observation by ID within an entity.
+   * @param entity - The entity containing the observation
+   * @param observationId - ID of the observation to find
+   * @returns The found observation
+   * @throws Error if observation not found
+   */
+  private findObservation(entity: Entity, observationId: string): Observation {
+    const observation = entity.observations.find(o => o.id === observationId);
+    if (!observation) {
+      throw new Error(`Observation '${observationId}' not found in entity '${entity.name}'`);
+    }
+    return observation;
+  }
+
+  /**
+   * Validate that an observation can be updated (not already superseded).
+   * @param observation - The observation to validate
+   * @throws Error if observation has already been superseded
+   */
+  private validateObservationNotSuperseded(observation: Observation): void {
+    if (observation.superseded_by) {
+      throw new Error(
+        `Observation '${observation.id}' has already been superseded by '${observation.superseded_by}'. Update the latest version instead.`
+      );
+    }
+  }
+
+  /**
+   * Resolve confidence value using inheritance chain: params > observation > entity.
+   * @param providedValue - Value provided in parameters (optional)
+   * @param observationValue - Value from observation (optional)
+   * @param entityValue - Value from entity (fallback)
+   * @returns Resolved confidence value
+   */
+  private resolveInheritedValue(
+    providedValue: number | undefined,
+    observationValue: number | undefined,
+    entityValue: number
+  ): number {
+    return providedValue ?? observationValue ?? entityValue;
+  }
+
+  /**
+   * Create a new observation version from an existing observation.
+   * @param oldObs - The observation being updated
+   * @param entity - The entity containing the observation
+   * @param params - Update parameters
+   * @returns New observation with incremented version
+   */
+  private createObservationVersion(
+    oldObs: Observation,
+    entity: Entity,
+    params: {
+      newContent: string;
+      agentThreadId: string;
+      timestamp: string;
+      confidence?: number;
+      importance?: number;
+    }
+  ): Observation {
+    return {
+      id: `obs_${randomUUID()}`,
+      content: params.newContent,
+      timestamp: params.timestamp,
+      version: oldObs.version + 1,
+      supersedes: oldObs.id,
+      agentThreadId: params.agentThreadId,
+      confidence: this.resolveInheritedValue(params.confidence, oldObs.confidence, entity.confidence),
+      importance: this.resolveInheritedValue(params.importance, oldObs.importance, entity.importance)
+    };
+  }
+
   async createEntities(entities: Entity[]): Promise<Entity[]> {
     await this.ensureInitialized();
     const graph = await this.storage.loadGraph();
@@ -131,6 +219,56 @@ export class KnowledgeGraphManager {
       }
     });
     await this.storage.saveGraph(graph);
+  }
+
+  /**
+   * Update an existing observation by creating a new version with updated content.
+   * This maintains the version history through the supersedes/superseded_by chain.
+   * 
+   * @param params - Update parameters
+   * @param params.entityName - Name of the entity containing the observation
+   * @param params.observationId - ID of the observation to update
+   * @param params.newContent - New content for the observation
+   * @param params.agentThreadId - Agent thread ID making this update
+   * @param params.timestamp - ISO 8601 timestamp of the update
+   * @param params.confidence - Optional confidence score (0-1), inherits from old observation if not provided
+   * @param params.importance - Optional importance score (0-1), inherits from old observation if not provided
+   * @returns The newly created observation with incremented version number
+   * @throws Error if entity not found
+   * @throws Error if observation not found
+   * @throws Error if observation has already been superseded (must update latest version)
+   */
+  async updateObservation(params: {
+    entityName: string;
+    observationId: string;
+    newContent: string;
+    agentThreadId: string;
+    timestamp: string;
+    confidence?: number;
+    importance?: number;
+  }): Promise<Observation> {
+    await this.ensureInitialized();
+    const graph = await this.storage.loadGraph();
+    
+    // Find and validate the entity and observation
+    const entity = this.findEntity(graph, params.entityName);
+    const oldObs = this.findObservation(entity, params.observationId);
+    this.validateObservationNotSuperseded(oldObs);
+    
+    // Create new version with inheritance chain
+    const newObs = this.createObservationVersion(oldObs, entity, params);
+    
+    // Link old observation to new one
+    oldObs.superseded_by = newObs.id;
+    
+    // Add new observation to entity
+    entity.observations.push(newObs);
+    
+    // Update entity timestamp
+    entity.timestamp = params.timestamp;
+    
+    await this.storage.saveGraph(graph);
+    return newObs;
   }
 
   async deleteRelations(relations: Relation[]): Promise<void> {
