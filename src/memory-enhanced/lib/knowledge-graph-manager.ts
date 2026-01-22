@@ -247,6 +247,7 @@ export class KnowledgeGraphManager {
     confidence?: number;
     importance?: number;
   }): Promise<Observation> {
+    await this.ensureInitialized();
     const graph = await this.storage.loadGraph();
     
     // Find and validate the entity and observation
