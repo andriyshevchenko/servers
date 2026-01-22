@@ -23,10 +23,10 @@ export class KnowledgeGraphManager {
 
   /**
    * Acquire lock for write operations to prevent race conditions
-   * @param operation - The async operation to execute with lock
+   * @param operation - The async operation to execute with lock, receives a cloned graph
    * @returns The result of the operation
    */
-  private async withWriteLock<T>(operation: () => Promise<T>): Promise<T> {
+  private async withWriteLock<T>(operation: (graph: KnowledgeGraph) => Promise<{ result: T; graph: KnowledgeGraph }>): Promise<T> {
     // Wait for previous operation to complete
     const previousLock = this.operationLock;
     
@@ -39,8 +39,18 @@ export class KnowledgeGraphManager {
     try {
       // Wait for previous operation
       await previousLock;
-      // Execute this operation
-      return await operation();
+      
+      // Load and clone the graph for mutation
+      const graph = await this.loadGraphCached(true);
+      const clonedGraph = this.deepCloneGraph(graph);
+      
+      // Execute operation on the clone
+      const { result, graph: mutatedGraph } = await operation(clonedGraph);
+      
+      // Save the mutated clone and invalidate cache atomically
+      await this.saveGraphAndInvalidate(mutatedGraph);
+      
+      return result;
     } finally {
       // Release the lock (safe because Promise executor runs synchronously)
       if (releaseLock) {
@@ -122,18 +132,21 @@ export class KnowledgeGraphManager {
   }
 
   /**
-   * Find an entity by name using index for O(1) lookup
-   * @param graph - The knowledge graph (for fallback)
+   * Find an entity by name using index for O(1) lookup when reading,
+   * or linear search from provided graph when mutating
+   * @param graph - The knowledge graph to search
    * @param entityName - Name of the entity to find
+   * @param useIndex - Whether to use the index (only safe when graph is cached, not a clone)
    * @returns The found entity
    * @throws Error if entity not found
    */
-  private findEntityFast(graph: KnowledgeGraph, entityName: string): Entity {
-    if (this.entityIndex) {
+  private findEntityFast(graph: KnowledgeGraph, entityName: string, useIndex: boolean = true): Entity {
+    // Only use index if explicitly allowed (for read operations on cached graph)
+    if (useIndex && this.entityIndex) {
       const entity = this.entityIndex.get(entityName);
       if (entity) return entity;
     }
-    // Fallback to linear search if index not available
+    // Fallback to linear search (always used for cloned graphs in write operations)
     const entity = graph.entities.find(e => e.name === entityName);
     if (!entity) {
       throw new Error(`Entity '${entityName}' not found`);
@@ -230,21 +243,19 @@ export class KnowledgeGraphManager {
   }
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
-    return this.withWriteLock(async () => {
+    return this.withWriteLock(async (graph) => {
       await this.ensureInitialized();
-      const graph = await this.loadGraphCached(true); // Force refresh for mutations
       // Entity names are globally unique across all threads in the collaborative knowledge graph
       // This prevents duplicate entities while allowing multiple threads to contribute to the same entity
       const newEntities = entities.filter(e => !graph.entities.some(existingEntity => existingEntity.name === e.name));
       graph.entities.push(...newEntities);
-      await this.saveGraphAndInvalidate(graph);
-      return newEntities;
+      return { result: newEntities, graph };
     });
   }
 
   async createRelations(relations: Relation[]): Promise<Relation[]> {
-    return this.withWriteLock(async () => {
-      const graph = await this.loadGraphCached(true); // Force refresh for mutations
+    return this.withWriteLock(async (graph) => {
+      await this.ensureInitialized();
     
     // Validate that referenced entities exist
     const entityNames = new Set(graph.entities.map(e => e.name));
@@ -264,16 +275,14 @@ export class KnowledgeGraphManager {
       existingRelation.relationType === r.relationType
     ));
     graph.relations.push(...newRelations);
-    await this.saveGraphAndInvalidate(graph);
-    return newRelations;
+    return { result: newRelations, graph };
     });
   }
 
   async addObservations(observations: { entityName: string; contents: string[]; agentThreadId: string; timestamp: string; confidence: number; importance: number }[]): Promise<{ entityName: string; addedObservations: Observation[] }[]> {
-    return this.withWriteLock(async () => {
-      const graph = await this.loadGraphCached(true);
-    const results = observations.map(o => {
-      const entity = this.findEntityFast(graph, o.entityName);
+    return this.withWriteLock(async (graph) => {
+      const results = observations.map(o => {
+      const entity = this.findEntityFast(graph, o.entityName, false);
       
       // Check for existing observations with same content to create version chain
       const newObservations: Observation[] = [];
@@ -311,35 +320,37 @@ export class KnowledgeGraphManager {
       
       return { entityName: o.entityName, addedObservations: newObservations };
     });
-    await this.saveGraphAndInvalidate(graph);
-    return results;
+    return { result: results, graph };
     });
   }
 
   async deleteEntities(entityNames: string[]): Promise<void> {
-    return this.withWriteLock(async () => {
-      const graph = await this.loadGraphCached(true);
+    return this.withWriteLock(async (graph) => {
       graph.entities = graph.entities.filter(e => !entityNames.includes(e.name));
       graph.relations = graph.relations.filter(r => !entityNames.includes(r.from) && !entityNames.includes(r.to));
-      await this.saveGraphAndInvalidate(graph);
+      return { result: undefined, graph };
     });
   }
 
   async deleteObservations(deletions: { entityName: string; observations: string[] }[]): Promise<void> {
-    return this.withWriteLock(async () => {
-      const graph = await this.loadGraphCached(true);
+    return this.withWriteLock(async (graph) => {
       deletions.forEach(d => {
         try {
-          const entity = this.findEntityFast(graph, d.entityName);
+          const entity = this.findEntityFast(graph, d.entityName, false);
           // Delete observations by content (for backward compatibility) or by ID
           entity.observations = entity.observations.filter(o => 
             !d.observations.includes(o.content) && !d.observations.includes(o.id)
           );
         } catch (error) {
-          // Entity not found - skip deletion
+          // Only catch entity not found errors; log unexpected errors
+          if (error instanceof Error && /not found/i.test(error.message)) {
+            // Entity not found - skip deletion silently
+            return;
+          }
+          console.error('Unexpected error while deleting observations for entity', d.entityName, error);
         }
       });
-      await this.saveGraphAndInvalidate(graph);
+      return { result: undefined, graph };
     });
   }
 
@@ -369,12 +380,11 @@ export class KnowledgeGraphManager {
     confidence?: number;
     importance?: number;
   }): Promise<Observation> {
-    return this.withWriteLock(async () => {
+    return this.withWriteLock(async (graph) => {
       await this.ensureInitialized();
-      const graph = await this.loadGraphCached(true);
       
       // Find and validate the entity and observation
-      const entity = this.findEntityFast(graph, params.entityName);
+      const entity = this.findEntityFast(graph, params.entityName, false);
       const oldObs = this.findObservation(entity, params.observationId);
       this.validateObservationNotSuperseded(oldObs);
       
@@ -390,14 +400,12 @@ export class KnowledgeGraphManager {
       // Update entity timestamp
       entity.timestamp = params.timestamp;
       
-      await this.saveGraphAndInvalidate(graph);
-      return newObs;
+      return { result: newObs, graph };
     });
   }
 
   async deleteRelations(relations: Relation[]): Promise<void> {
-    return this.withWriteLock(async () => {
-      const graph = await this.loadGraphCached(true);
+    return this.withWriteLock(async (graph) => {
       // Delete relations globally across all threads by matching (from, to, relationType)
       // In a collaborative knowledge graph, deletions affect all threads
       graph.relations = graph.relations.filter(r => !relations.some(delRelation => 
@@ -405,7 +413,7 @@ export class KnowledgeGraphManager {
         r.to === delRelation.to && 
         r.relationType === delRelation.relationType
       ));
-      await this.saveGraphAndInvalidate(graph);
+      return { result: undefined, graph };
     });
   }
 
@@ -476,9 +484,9 @@ export class KnowledgeGraphManager {
   }): Promise<KnowledgeGraph> {
     const graph = await this.loadGraphCached();
     
-    // If no filters provided, return entire graph
+    // If no filters provided, return cloned graph
     if (!filters) {
-      return graph;
+      return this.deepCloneGraph(graph);
     }
     
     // Apply filters to entities
@@ -521,9 +529,13 @@ export class KnowledgeGraphManager {
       return true;
     });
   
+    // Return cloned data to prevent external mutations
     return {
-      entities: filteredEntities,
-      relations: filteredRelations,
+      entities: filteredEntities.map(e => ({
+        ...e,
+        observations: e.observations.map(o => ({ ...o }))
+      })),
+      relations: filteredRelations.map(r => ({ ...r }))
     };
   }
 
@@ -676,9 +688,13 @@ export class KnowledgeGraphManager {
     // Only include relations that are recent themselves
     const recentRelations = graph.relations.filter(r => new Date(r.timestamp) >= sinceDate);
     
+    // Return cloned data to prevent external mutations
     return {
-      entities: recentEntities,
-      relations: recentRelations
+      entities: recentEntities.map(e => ({
+        ...e,
+        observations: e.observations.map(o => ({ ...o }))
+      })),
+      relations: recentRelations.map(r => ({ ...r }))
     };
   }
 
@@ -769,11 +785,12 @@ export class KnowledgeGraphManager {
     for (const entity of graph.entities) {
       const entityConflicts: { obs1: string; obs2: string; reason: string }[] = [];
       
-      // Pre-compute lowercase content and negation checks for all observations
+      // Pre-compute lowercase content, negation checks, and word arrays for all observations
       const obsData = entity.observations.map(obs => {
         const content = obs.content.toLowerCase();
         const hasNegation = negationWordsArray.some(word => content.includes(word));
-        return { obs, content, hasNegation };
+        const words = content.split(/\s+/).filter(w => w.length > 3);
+        return { obs, content, hasNegation, words };
       });
       
       for (let i = 0; i < obsData.length; i++) {
@@ -791,9 +808,8 @@ export class KnowledgeGraphManager {
           
           // If one has negation and they share key words, might be a conflict
           if (obs1Data.hasNegation !== obs2Data.hasNegation) {
-            const words1 = obs1Data.content.split(/\s+/).filter(w => w.length > 3);
-            const words2Set = new Set(obs2Data.content.split(/\s+/).filter(w => w.length > 3));
-            const commonWords = words1.filter(w => words2Set.has(w) && !KnowledgeGraphManager.NEGATION_WORDS.has(w));
+            const words2Set = new Set(obs2Data.words);
+            const commonWords = obs1Data.words.filter(w => words2Set.has(w) && !KnowledgeGraphManager.NEGATION_WORDS.has(w));
             
             if (commonWords.length >= 2) {
               entityConflicts.push({
@@ -820,8 +836,7 @@ export class KnowledgeGraphManager {
     importanceLessThan?: number;
     keepMinEntities?: number;
   }): Promise<{ removedEntities: number; removedRelations: number }> {
-    return this.withWriteLock(async () => {
-      const graph = await this.loadGraphCached(true);
+    return this.withWriteLock(async (graph) => {
       const initialEntityCount = graph.entities.length;
       const initialRelationCount = graph.relations.length;
       
@@ -860,12 +875,13 @@ export class KnowledgeGraphManager {
       
       graph.entities = entitiesToKeep;
       graph.relations = relationsToKeep;
-      await this.saveGraphAndInvalidate(graph);
       
-      return {
+      const result = {
         removedEntities: initialEntityCount - entitiesToKeep.length,
         removedRelations: initialRelationCount - relationsToKeep.length
       };
+      
+      return { result, graph };
     });
   }
 
@@ -876,8 +892,7 @@ export class KnowledgeGraphManager {
     importance?: number;
     addObservations?: string[];
   }[]): Promise<{ updated: number; notFound: string[] }> {
-    return this.withWriteLock(async () => {
-      const graph = await this.loadGraphCached(true);
+    return this.withWriteLock(async (graph) => {
       let updated = 0;
       const notFound: string[] = [];
       
@@ -918,16 +933,14 @@ export class KnowledgeGraphManager {
         updated++;
       }
       
-      await this.saveGraphAndInvalidate(graph);
-      return { updated, notFound };
+      return { result: { updated, notFound }, graph };
     });
   }
 
   // Enhancement 7: Flag for review (Human-in-the-Loop)
   async flagForReview(entityName: string, reason: string, reviewer?: string): Promise<void> {
-    return this.withWriteLock(async () => {
-      const graph = await this.loadGraphCached(true);
-      const entity = this.findEntityFast(graph, entityName);
+    return this.withWriteLock(async (graph) => {
+      const entity = this.findEntityFast(graph, entityName, false);
       
       // Add a special observation to mark for review
       const flagContent = `[FLAGGED FOR REVIEW: ${reason}${reviewer ? ` - Reviewer: ${reviewer}` : ''}]`;
@@ -946,8 +959,8 @@ export class KnowledgeGraphManager {
         
         entity.observations.push(flagObservation);
         entity.timestamp = new Date().toISOString();
-        await this.saveGraphAndInvalidate(graph);
       }
+      return { result: undefined, graph };
     });
   }
 
@@ -995,9 +1008,13 @@ export class KnowledgeGraphManager {
       contextEntityNames.has(r.from) && contextEntityNames.has(r.to)
     );
     
+    // Return cloned data to prevent external mutations
     return {
-      entities: contextEntities,
-      relations: contextRelations
+      entities: contextEntities.map(e => ({
+        ...e,
+        observations: e.observations.map(o => ({ ...o }))
+      })),
+      relations: contextRelations.map(r => ({ ...r }))
     };
   }
 
