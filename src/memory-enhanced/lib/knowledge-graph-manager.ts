@@ -19,11 +19,20 @@ export class KnowledgeGraphManager {
 
   /**
    * Check if content contains any negation words (using word boundary matching)
+   * Handles punctuation and avoids creating intermediate Set for performance
    */
   private hasNegation(content: string): boolean {
-    const words = new Set(content.toLowerCase().split(/\s+/));
-    for (const word of KnowledgeGraphManager.NEGATION_WORDS) {
-      if (words.has(word)) {
+    // Extract words using word boundary regex, removing punctuation
+    const lowerContent = content.toLowerCase();
+    const wordMatches = lowerContent.match(/\b\w+\b/g);
+    
+    if (!wordMatches) {
+      return false;
+    }
+    
+    // Check each word against negation words without creating intermediate Set
+    for (const word of wordMatches) {
+      if (KnowledgeGraphManager.NEGATION_WORDS.has(word)) {
         return true;
       }
     }
