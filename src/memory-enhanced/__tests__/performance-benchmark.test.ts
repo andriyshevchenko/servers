@@ -283,10 +283,10 @@ describe('Performance Benchmarks', () => {
     }];
     await manager.createEntities(newEntities);
 
-    // Read again (should see new data, not cached old data)
+    // Read again - verify cache was invalidated and new data is visible
     const result2 = await manager.searchNodes('Entity');
     expect(result2.entities.length).toBe(51); // Should include NewEntity
 
-    console.log('Cache invalidation working correctly ✓');
+    console.log('Cache invalidation verified: writes invalidate cache, subsequent reads reflect mutations ✓');
   });
 });

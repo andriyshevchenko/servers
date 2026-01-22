@@ -24,9 +24,10 @@ Note: Entity lookups remain O(n) via linear search, which is acceptable for typi
 - Write operations force refresh and invalidate cache
 - Cache is automatically invalidated after mutations
 
-**Impact**: **42.41x speedup** for repeated read operations
-- Before: 2.34ms per read
-- After: 0.06ms per cached read
+**Impact**: **Example measurements show up to 42x speedup** for repeated read operations
+- Before optimization: 2.34ms per read (measured in tests)
+- After optimization: 0.06ms per cached read (measured in tests)
+- Actual performance will vary based on hardware, system load, and dataset size
 
 **Files Modified**: `knowledge-graph-manager.ts`
 
@@ -166,13 +167,17 @@ All benchmarks are included in `__tests__/performance-benchmark.test.ts`.
 
 ### Test Results
 
-| Operation | Dataset | Before (est) | After | Speedup |
-|-----------|---------|-------------|-------|---------|
-| Repeated reads | 100 entities | 2.34ms/read | 0.06ms/read | **42.41x** |
-| Entity lookups | 500 entities | ~5-10ms | 0.30ms | **~17-33x** |
-| Conflict detection | 50 entities, 200 obs | ~10-20ms | 1.52ms | **~7-13x** |
-| Context depth 2 | 200 entities | ~5-10ms | 0.41ms | **~12-24x** |
-| Query nodes | 300 entities | Similar | 5.90ms | Stable |
+Performance measurements from test runs (actual results will vary by hardware and system load):
+
+| Operation | Dataset | After (measured) | Notes |
+|-----------|---------|------------------|-------|
+| Repeated reads | 100 entities | 0.06ms/read | 42x faster than first read (2.34ms) |
+| Entity lookups | 500 entities | 0.30ms | Benefits from caching |
+| Conflict detection | 50 entities, 200 obs | 1.52ms | Pre-computation optimization |
+| Context depth 2 | 200 entities | 0.41ms | Adjacency list optimization |
+| Query nodes | 300 entities | 5.90ms | Baseline operation |
+
+**Note**: "Before" measurements were not systematically collected. The primary optimization (caching) shows 19-42x speedup in repeated read scenarios by eliminating disk I/O. Other optimizations provide algorithmic improvements (pre-computation, adjacency lists) that reduce computation time.
 
 ### How to Run Benchmarks
 

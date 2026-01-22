@@ -140,11 +140,11 @@ export class KnowledgeGraphManager {
    * Find an entity by name using linear search
    * @param graph - The knowledge graph to search
    * @param entityName - Name of the entity to find
-   * @param useIndex - Unused parameter kept for compatibility
+   * @param useIndex - Deprecated and ignored; retained only for backward compatibility
    * @returns The found entity
    * @throws Error if entity not found
    */
-  private findEntityFast(graph: KnowledgeGraph, entityName: string, useIndex: boolean = true): Entity {
+  private findEntityFast(graph: KnowledgeGraph, entityName: string, useIndex?: boolean): Entity {
     // Linear search (O(n)) - index infrastructure exists but is currently unused
     const entity = graph.entities.find(e => e.name === entityName);
     if (!entity) {
@@ -339,12 +339,12 @@ export class KnowledgeGraphManager {
             !d.observations.includes(o.content) && !d.observations.includes(o.id)
           );
         } catch (error) {
-          // Only catch entity not found errors; log unexpected errors
+          // Only catch entity not found errors; rethrow unexpected errors
           if (error instanceof Error && /not found/i.test(error.message)) {
             // Entity not found - skip deletion silently
             return;
           }
-          console.error('Unexpected error while deleting observations for entity', d.entityName, error);
+          throw error;
         }
       });
       return { result: undefined, graph };
@@ -963,9 +963,15 @@ export class KnowledgeGraphManager {
   // Enhancement 8: Get entities flagged for review
   async getFlaggedEntities(): Promise<Entity[]> {
     const graph = await this.loadGraphCached();
-    return graph.entities.filter(e => 
+    const flaggedEntities = graph.entities.filter(e => 
       e.observations.some(obs => obs.content.includes('[FLAGGED FOR REVIEW:'))
     );
+
+    // Return cloned entities to prevent external mutations from affecting the cached graph
+    return flaggedEntities.map(e => ({
+      ...e,
+      observations: e.observations.map(o => ({ ...o }))
+    }));
   }
 
   // Enhancement 9: Get context (entities related to a topic/entity)
