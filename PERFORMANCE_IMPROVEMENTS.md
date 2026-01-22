@@ -5,10 +5,12 @@ This document describes the performance optimizations implemented in the Memory-
 ## Overview
 
 Multiple performance bottlenecks were identified and addressed, resulting in significant performance improvements:
-- **42x speedup** for cached read operations
-- **O(1) entity lookups** instead of O(n) linear search
+- **19-42x speedup** for cached read operations (PRIMARY WIN)
+- **In-memory operations** eliminating disk I/O bottleneck
 - **Optimized conflict detection** with pre-computation
 - **Efficient graph traversal** with adjacency lists
+
+Note: Entity lookups remain O(n) via linear search, which is acceptable for typical graph sizes since the real bottleneck (disk I/O) is eliminated by caching.
 
 ## Key Optimizations
 
@@ -217,13 +219,13 @@ WRITE OPERATIONS (force refresh + invalidate):
 
 The caching layer adds minimal memory overhead:
 - **Graph cache**: 1x graph in memory (same as before, but reused)
-- **Entity index**: ~40 bytes per entity (Map overhead + string reference)
+- **Entity index**: Currently disabled (no additional index structures kept in memory)
 - **Adjacency list**: Built on-demand in getContext, not cached
 
 For a typical graph with 1000 entities and 3000 relations:
 - Graph cache: Same as before (already in memory during operations)
-- Entity index: ~40 KB additional
-- Total overhead: **< 50 KB**
+- Additional overhead from caching layer: negligible (no persistent indexes; adjacency lists are short-lived)
+- Total steady-state overhead: **< 1 KB** (just the cache reference and state variables)
 
 ## Backward Compatibility
 
