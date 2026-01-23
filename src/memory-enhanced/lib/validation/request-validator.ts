@@ -30,6 +30,14 @@ export interface SaveMemoryValidationResult {
 
 /**
  * Validate a single entity and collect errors
+ * 
+ * **IMPORTANT**: This function mutates the entity.entityType field to normalize it.
+ * This is intentional for backward compatibility with existing behavior.
+ * 
+ * @param entity Entity to validate (will be mutated to normalize entityType)
+ * @param entityIndex Index of the entity in the request
+ * @param entityNames Set of all entity names in the request
+ * @param existingEntityNames Optional set of existing entity names
  */
 function validateEntity(
   entity: SaveMemoryEntity,

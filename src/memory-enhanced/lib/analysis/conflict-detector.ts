@@ -3,9 +3,7 @@
  */
 
 import { IStorageAdapter } from '../storage-interface.js';
-import { hasNegation } from '../utils/negation-detector.js';
-
-const NEGATION_WORDS = new Set(['not', 'no', 'never', 'neither', 'none', 'doesn\'t', 'don\'t', 'isn\'t', 'aren\'t']);
+import { hasNegation, NEGATION_WORDS } from '../utils/negation-detector.js';
 
 /**
  * Detect conflicting observations within entities

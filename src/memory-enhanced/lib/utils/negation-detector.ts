@@ -2,7 +2,7 @@
  * Utility for detecting negation words in text content
  */
 
-const NEGATION_WORDS = new Set(['not', 'no', 'never', 'neither', 'none', 'doesn\'t', 'don\'t', 'isn\'t', 'aren\'t']);
+export const NEGATION_WORDS = new Set(['not', 'no', 'never', 'neither', 'none', 'doesn\'t', 'don\'t', 'isn\'t', 'aren\'t']);
 
 /**
  * Check if content contains any negation words (using word boundary matching)
