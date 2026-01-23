@@ -27,7 +27,7 @@ export function normalizeEntityType(entityType: string): { normalized: string; w
       warnings.push(`EntityType '${entityType}' contains spaces. Consider using '${suggested}' instead.`);
     } else {
       // Handle the edge case where the entity type is only whitespace
-      warnings.push(`EntityType '${entityType}' contains only whitespace and will be treated as empty.`);
+      warnings.push(`EntityType '${entityType}' contains only whitespace; it is syntactically empty but left unchanged by normalization.`);
     }
   }
   

@@ -50,28 +50,13 @@ function calculateTopImportant(threadEntities: Entity[]): Array<{
  */
 function calculateMostConnected(
   threadEntities: Entity[],
-  threadRelations: Relation[]
+  entityRelationCounts: Map<string, Set<string>>
 ): Array<{
   entityName: string;
   entityType: string;
   relationCount: number;
   connectedTo: string[];
 }> {
-  const entityRelationCounts = new Map<string, Set<string>>();
-  
-  for (const entity of threadEntities) {
-    entityRelationCounts.set(entity.name, new Set());
-  }
-  
-  for (const relation of threadRelations) {
-    if (entityRelationCounts.has(relation.from)) {
-      entityRelationCounts.get(relation.from)!.add(relation.to);
-    }
-    if (entityRelationCounts.has(relation.to)) {
-      entityRelationCounts.get(relation.to)!.add(relation.from);
-    }
-  }
-  
   return Array.from(entityRelationCounts.entries())
     .map(([entityName, connectedSet]) => {
       const entity = threadEntities.find(e => e.name === entityName)!;
@@ -176,7 +161,7 @@ export async function getAnalytics(
   const recent_changes = calculateRecentChanges(threadEntities);
   const top_important = calculateTopImportant(threadEntities);
   
-  // For most_connected, we need to build the relation counts first
+  // Build the relation counts map once for both most_connected and orphaned_entities
   const entityRelationCounts = new Map<string, Set<string>>();
   for (const entity of threadEntities) {
     entityRelationCounts.set(entity.name, new Set());
@@ -190,7 +175,7 @@ export async function getAnalytics(
     }
   }
   
-  const most_connected = calculateMostConnected(threadEntities, threadRelations);
+  const most_connected = calculateMostConnected(threadEntities, entityRelationCounts);
   const orphaned_entities = calculateOrphanedEntities(threadEntities, threadRelations, entityRelationCounts);
   
   return {
