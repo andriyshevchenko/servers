@@ -36,11 +36,8 @@ export async function getMemoryStats(storage: IStorageAdapter, threadId: string)
     ? threadEntities.reduce((sum, e) => sum + e.importance, 0) / threadEntities.length
     : 0;
   
-  // Count unique threads (for this thread it should be 1, but we keep the logic consistent)
-  const threads = new Set([
-    ...threadEntities.map(e => e.agentThreadId),
-    ...threadRelations.map(r => r.agentThreadId)
-  ]);
+  // Thread count is always 1 since we're filtering to a single thread
+  const threadCount = (threadEntities.length > 0 || threadRelations.length > 0) ? 1 : 0;
   
   // Recent activity (last 7 days, grouped by day)
   const now = new Date();
@@ -61,7 +58,7 @@ export async function getMemoryStats(storage: IStorageAdapter, threadId: string)
   return {
     entityCount: threadEntities.length,
     relationCount: threadRelations.length,
-    threadCount: threads.size,
+    threadCount,
     entityTypes,
     avgConfidence,
     avgImportance,

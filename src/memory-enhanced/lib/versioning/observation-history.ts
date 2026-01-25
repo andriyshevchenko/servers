@@ -21,7 +21,8 @@ export async function getObservationHistory(
   
   // Filter graph to specific thread first
   const threadEntities = graph.entities.filter(e => e.agentThreadId === threadId);
-  const threadGraph = { entities: threadEntities, relations: [] };
+  const threadRelations = graph.relations.filter(r => r.agentThreadId === threadId);
+  const threadGraph = { entities: threadEntities, relations: threadRelations };
   
   // Find the entity
   const entity = findEntity(threadGraph, entityName);
