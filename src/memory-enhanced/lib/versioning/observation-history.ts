@@ -4,7 +4,6 @@
 
 import { Observation } from '../types.js';
 import { IStorageAdapter } from '../storage-interface.js';
-import { findEntity, findObservation } from '../utils/entity-finder.js';
 
 /**
  * Get full history chain for an observation
