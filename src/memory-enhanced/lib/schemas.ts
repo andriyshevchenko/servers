@@ -61,8 +61,8 @@ export const SaveMemoryEntitySchema = z.object({
 });
 
 export const SaveMemoryInputSchema = z.object({
-  entities: z.array(SaveMemoryEntitySchema).min(1).describe("Array of entities to save"),
-  threadId: z.string().min(1).describe("Thread ID for this conversation/project")
+  threadId: z.string().min(1).describe("Thread ID for this conversation/project"),
+  entities: z.array(SaveMemoryEntitySchema).min(1).describe("Array of entities to save")
 });
 
 export const SaveMemoryOutputSchema = z.object({
@@ -110,6 +110,7 @@ export const GetAnalyticsOutputSchema = z.object({
 
 // Schema for get_observation_history tool (Observation Versioning section of spec)
 export const GetObservationHistoryInputSchema = z.object({
+  threadId: z.string().min(1).describe("Thread ID for this conversation/project"),
   entityName: z.string().min(1).describe("Name of the entity"),
   observationId: z.string().min(1).describe("ID of the observation to retrieve history for")
 });
@@ -120,7 +121,7 @@ export const GetObservationHistoryOutputSchema = z.object({
 
 // Schema for list_entities tool (Simple Entity Lookup)
 export const ListEntitiesInputSchema = z.object({
-  threadId: z.string().optional().describe("Filter by thread ID (optional - returns entities from all threads if not specified)"),
+  threadId: z.string().min(1).describe("Thread ID for this conversation/project"),
   entityType: z.string().optional().describe("Filter by entity type (e.g., 'Person', 'Service', 'Document')"),
   namePattern: z.string().optional().describe("Filter by name pattern (case-insensitive substring match)")
 });
@@ -134,8 +135,8 @@ export const ListEntitiesOutputSchema = z.object({
 
 // Schema for validate_memory tool (Pre-Validation)
 export const ValidateMemoryInputSchema = z.object({
-  entities: z.array(SaveMemoryEntitySchema).min(1).describe("Array of entities to validate"),
-  threadId: z.string().min(1).describe("Thread ID for this conversation/project")
+  threadId: z.string().min(1).describe("Thread ID for this conversation/project"),
+  entities: z.array(SaveMemoryEntitySchema).min(1).describe("Array of entities to validate")
 });
 
 export const ValidateMemoryOutputSchema = z.object({
@@ -152,10 +153,10 @@ export const ValidateMemoryOutputSchema = z.object({
 
 // Schema for update_observation tool
 export const UpdateObservationInputSchema = z.object({
+  agentThreadId: z.string().min(1).describe("Agent thread ID making this update"),
   entityName: z.string().min(1).describe("Name of the entity containing the observation"),
   observationId: z.string().min(1).describe("ID of the observation to update"),
   newContent: z.string().min(1).max(300).describe("New content for the observation (max 300 chars). Minimum 1 character to allow short but valid observations like abbreviations or single words."),
-  agentThreadId: z.string().min(1).describe("Agent thread ID making this update"),
   timestamp: z.string().describe("ISO 8601 timestamp of the update"),
   confidence: z.number().min(0).max(1).optional().describe("Optional confidence score (0-1), inherits from old observation if not provided"),
   importance: z.number().min(0).max(1).optional().describe("Optional importance score (0-1), inherits from old observation if not provided")
@@ -165,4 +166,68 @@ export const UpdateObservationOutputSchema = z.object({
   success: z.boolean(),
   updatedObservation: ObservationSchema.describe("The new version of the observation"),
   message: z.string()
+});
+
+// Schema for read_graph tool
+export const ReadGraphInputSchema = z.object({
+  threadId: z.string().min(1).describe("Thread ID for this conversation/project")
+});
+
+// Schema for search_nodes tool
+export const SearchNodesInputSchema = z.object({
+  threadId: z.string().min(1).describe("Thread ID for this conversation/project"),
+  query: z.string().min(1).describe("Search query string")
+});
+
+// Schema for open_nodes tool
+export const OpenNodesInputSchema = z.object({
+  threadId: z.string().min(1).describe("Thread ID for this conversation/project"),
+  names: z.array(z.string()).min(1).describe("Array of entity names to open")
+});
+
+// Schema for query_nodes tool
+export const QueryNodesInputSchema = z.object({
+  threadId: z.string().min(1).describe("Thread ID for this conversation/project"),
+  timestampStart: z.string().optional().describe("Filter by start timestamp (ISO 8601)"),
+  timestampEnd: z.string().optional().describe("Filter by end timestamp (ISO 8601)"),
+  confidenceMin: z.number().min(0).max(1).optional().describe("Filter by minimum confidence (0-1)"),
+  confidenceMax: z.number().min(0).max(1).optional().describe("Filter by maximum confidence (0-1)"),
+  importanceMin: z.number().min(0).max(1).optional().describe("Filter by minimum importance (0-1)"),
+  importanceMax: z.number().min(0).max(1).optional().describe("Filter by maximum importance (0-1)")
+});
+
+// Schema for get_memory_stats tool
+export const GetMemoryStatsInputSchema = z.object({
+  threadId: z.string().min(1).describe("Thread ID for this conversation/project")
+});
+
+// Schema for get_recent_changes tool
+export const GetRecentChangesInputSchema = z.object({
+  threadId: z.string().min(1).describe("Thread ID for this conversation/project"),
+  since: z.string().describe("ISO 8601 timestamp to get changes since")
+});
+
+// Schema for find_relation_path tool
+export const FindRelationPathInputSchema = z.object({
+  threadId: z.string().min(1).describe("Thread ID for this conversation/project"),
+  from: z.string().min(1).describe("Source entity name"),
+  to: z.string().min(1).describe("Target entity name"),
+  maxDepth: z.number().int().min(1).optional().default(5).describe("Maximum path depth (default: 5)")
+});
+
+// Schema for detect_conflicts tool
+export const DetectConflictsInputSchema = z.object({
+  threadId: z.string().min(1).describe("Thread ID for this conversation/project")
+});
+
+// Schema for get_flagged_entities tool
+export const GetFlaggedEntitiesInputSchema = z.object({
+  threadId: z.string().min(1).describe("Thread ID for this conversation/project")
+});
+
+// Schema for get_context tool
+export const GetContextInputSchema = z.object({
+  threadId: z.string().min(1).describe("Thread ID for this conversation/project"),
+  entityNames: z.array(z.string()).min(1).describe("Array of entity names to get context for"),
+  depth: z.number().int().min(1).optional().default(1).describe("Context depth (default: 1)")
 });

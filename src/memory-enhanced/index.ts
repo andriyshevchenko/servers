@@ -24,7 +24,17 @@ import {
   ValidateMemoryInputSchema,
   ValidateMemoryOutputSchema,
   UpdateObservationInputSchema,
-  UpdateObservationOutputSchema
+  UpdateObservationOutputSchema,
+  ReadGraphInputSchema,
+  SearchNodesInputSchema,
+  OpenNodesInputSchema,
+  QueryNodesInputSchema,
+  GetMemoryStatsInputSchema,
+  GetRecentChangesInputSchema,
+  FindRelationPathInputSchema,
+  DetectConflictsInputSchema,
+  GetFlaggedEntitiesInputSchema,
+  GetContextInputSchema
 } from './lib/schemas.js';
 import { handleSaveMemory } from './lib/save-memory-handler.js';
 import { validateSaveMemoryRequest } from './lib/validation.js';
@@ -405,15 +415,15 @@ server.registerTool(
   "read_graph",
   {
     title: "Read Graph",
-    description: "Read the entire knowledge graph",
-    inputSchema: {},
+    description: "Read the knowledge graph for a specific thread (thread isolation enforced)",
+    inputSchema: ReadGraphInputSchema,
     outputSchema: {
       entities: z.array(EntitySchemaCompat),
       relations: z.array(RelationSchemaCompat)
     }
   },
-  async () => {
-    const graph = await knowledgeGraphManager.readGraph();
+  async (input: any) => {
+    const graph = await knowledgeGraphManager.readGraph(input.threadId);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(graph, null, 2) }],
       structuredContent: { ...graph }
@@ -426,17 +436,15 @@ server.registerTool(
   "search_nodes",
   {
     title: "Search Nodes",
-    description: "Search for nodes in the knowledge graph based on a query",
-    inputSchema: {
-      query: z.string().describe("The search query to match against entity names, types, and observation content")
-    },
+    description: "Search for nodes in the knowledge graph based on a query (thread isolation enforced)",
+    inputSchema: SearchNodesInputSchema,
     outputSchema: {
       entities: z.array(EntitySchemaCompat),
       relations: z.array(RelationSchemaCompat)
     }
   },
-  async ({ query }) => {
-    const graph = await knowledgeGraphManager.searchNodes(query);
+  async (input: any) => {
+    const graph = await knowledgeGraphManager.searchNodes(input.threadId, input.query);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(graph, null, 2) }],
       structuredContent: { ...graph }
@@ -449,17 +457,15 @@ server.registerTool(
   "open_nodes",
   {
     title: "Open Nodes",
-    description: "Open specific nodes in the knowledge graph by their names",
-    inputSchema: {
-      names: z.array(z.string()).describe("An array of entity names to retrieve")
-    },
+    description: "Open specific nodes in the knowledge graph by their names (thread isolation enforced)",
+    inputSchema: OpenNodesInputSchema,
     outputSchema: {
       entities: z.array(EntitySchemaCompat),
       relations: z.array(RelationSchemaCompat)
     }
   },
-  async ({ names }) => {
-    const graph = await knowledgeGraphManager.openNodes(names);
+  async (input: any) => {
+    const graph = await knowledgeGraphManager.openNodes(input.threadId, input.names);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(graph, null, 2) }],
       structuredContent: { ...graph }
@@ -472,22 +478,16 @@ server.registerTool(
   "query_nodes",
   {
     title: "Query Nodes",
-    description: "Query nodes and relations in the knowledge graph with advanced filtering by timestamp, confidence, and importance ranges",
-    inputSchema: {
-      timestampStart: z.string().optional().describe("ISO 8601 timestamp - filter for items created on or after this time"),
-      timestampEnd: z.string().optional().describe("ISO 8601 timestamp - filter for items created on or before this time"),
-      confidenceMin: z.number().min(0).max(1).optional().describe("Minimum confidence value (0-1)"),
-      confidenceMax: z.number().min(0).max(1).optional().describe("Maximum confidence value (0-1)"),
-      importanceMin: z.number().min(0).max(1).optional().describe("Minimum importance value (0-1)"),
-      importanceMax: z.number().min(0).max(1).optional().describe("Maximum importance value (0-1)")
-    },
+    description: "Query nodes and relations in the knowledge graph with advanced filtering by timestamp, confidence, and importance ranges (thread isolation enforced)",
+    inputSchema: QueryNodesInputSchema,
     outputSchema: {
       entities: z.array(EntitySchemaCompat),
       relations: z.array(RelationSchemaCompat)
     }
   },
-  async (filters) => {
-    const graph = await knowledgeGraphManager.queryNodes(filters);
+  async (input: any) => {
+    const { threadId, ...filters } = input;
+    const graph = await knowledgeGraphManager.queryNodes(threadId, Object.keys(filters).length > 0 ? filters : undefined);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(graph, null, 2) }],
       structuredContent: { ...graph }
@@ -500,7 +500,7 @@ server.registerTool(
   "list_entities",
   {
     title: "List Entities",
-    description: "List entities with optional filtering by entity type and name pattern. Returns a simple list of entity names and types for quick discovery.",
+    description: "List entities with optional filtering by entity type and name pattern. Returns a simple list of entity names and types for quick discovery. Thread isolation enforced - only shows entities from the specified thread.",
     inputSchema: ListEntitiesInputSchema,
     outputSchema: ListEntitiesOutputSchema
   },
@@ -662,8 +662,8 @@ server.registerTool(
   "get_memory_stats",
   {
     title: "Get Memory Statistics",
-    description: "Get comprehensive statistics about the knowledge graph including entity counts, thread activity, and confidence/importance metrics",
-    inputSchema: {},
+    description: "Get comprehensive statistics about the knowledge graph for a specific thread including entity counts, activity, and confidence/importance metrics (thread isolation enforced)",
+    inputSchema: GetMemoryStatsInputSchema,
     outputSchema: {
       entityCount: z.number(),
       relationCount: z.number(),
@@ -677,8 +677,8 @@ server.registerTool(
       }))
     }
   },
-  async () => {
-    const stats = await knowledgeGraphManager.getMemoryStats();
+  async (input: any) => {
+    const stats = await knowledgeGraphManager.getMemoryStats(input.threadId);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(stats, null, 2) }],
       structuredContent: stats
@@ -691,17 +691,15 @@ server.registerTool(
   "get_recent_changes",
   {
     title: "Get Recent Changes",
-    description: "Retrieve entities and relations that were created or modified since a specific timestamp",
-    inputSchema: {
-      since: z.string().describe("ISO 8601 timestamp - return changes since this time")
-    },
+    description: "Retrieve entities and relations that were created or modified since a specific timestamp (thread isolation enforced)",
+    inputSchema: GetRecentChangesInputSchema,
     outputSchema: {
       entities: z.array(EntitySchemaCompat),
       relations: z.array(RelationSchemaCompat)
     }
   },
-  async ({ since }) => {
-    const changes = await knowledgeGraphManager.getRecentChanges(since);
+  async (input: any) => {
+    const changes = await knowledgeGraphManager.getRecentChanges(input.threadId, input.since);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(changes, null, 2) }],
       structuredContent: { ...changes }
@@ -714,20 +712,16 @@ server.registerTool(
   "find_relation_path",
   {
     title: "Find Relationship Path",
-    description: "Find a path of relationships connecting two entities in the knowledge graph",
-    inputSchema: {
-      from: z.string().describe("Starting entity name"),
-      to: z.string().describe("Target entity name"),
-      maxDepth: z.number().optional().default(5).describe("Maximum path depth to search (default: 5)")
-    },
+    description: "Find a path of relationships connecting two entities in the knowledge graph (thread isolation enforced)",
+    inputSchema: FindRelationPathInputSchema,
     outputSchema: {
       found: z.boolean(),
       path: z.array(z.string()),
       relations: z.array(RelationSchemaCompat)
     }
   },
-  async ({ from, to, maxDepth }) => {
-    const result = await knowledgeGraphManager.findRelationPath(from, to, maxDepth || 5);
+  async (input: any) => {
+    const result = await knowledgeGraphManager.findRelationPath(input.threadId, input.from, input.to, input.maxDepth || 5);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
       structuredContent: result
@@ -740,8 +734,8 @@ server.registerTool(
   "detect_conflicts",
   {
     title: "Detect Conflicts",
-    description: "Detect potentially conflicting observations within entities using pattern matching and negation detection",
-    inputSchema: {},
+    description: "Detect potentially conflicting observations within entities using pattern matching and negation detection (thread isolation enforced)",
+    inputSchema: DetectConflictsInputSchema,
     outputSchema: {
       conflicts: z.array(z.object({
         entityName: z.string(),
@@ -753,8 +747,8 @@ server.registerTool(
       }))
     }
   },
-  async () => {
-    const conflicts = await knowledgeGraphManager.detectConflicts();
+  async (input: any) => {
+    const conflicts = await knowledgeGraphManager.detectConflicts(input.threadId);
     return {
       content: [{ type: "text" as const, text: JSON.stringify({ conflicts }, null, 2) }],
       structuredContent: { conflicts }
@@ -845,14 +839,14 @@ server.registerTool(
   "get_flagged_entities",
   {
     title: "Get Flagged Entities",
-    description: "Retrieve all entities that have been flagged for human review",
-    inputSchema: {},
+    description: "Retrieve all entities that have been flagged for human review (thread isolation enforced)",
+    inputSchema: GetFlaggedEntitiesInputSchema,
     outputSchema: {
       entities: z.array(EntitySchemaCompat)
     }
   },
-  async () => {
-    const entities = await knowledgeGraphManager.getFlaggedEntities();
+  async (input: any) => {
+    const entities = await knowledgeGraphManager.getFlaggedEntities(input.threadId);
     return {
       content: [{ type: "text" as const, text: JSON.stringify({ entities }, null, 2) }],
       structuredContent: { entities }
@@ -865,18 +859,15 @@ server.registerTool(
   "get_context",
   {
     title: "Get Context",
-    description: "Retrieve entities and relations related to specified entities up to a certain depth, useful for understanding context around specific topics",
-    inputSchema: {
-      entityNames: z.array(z.string()).describe("Names of entities to get context for"),
-      depth: z.number().optional().default(1).describe("How many relationship hops to include (default: 1)")
-    },
+    description: "Retrieve entities and relations related to specified entities up to a certain depth, useful for understanding context around specific topics (thread isolation enforced)",
+    inputSchema: GetContextInputSchema,
     outputSchema: {
       entities: z.array(EntitySchemaCompat),
       relations: z.array(RelationSchemaCompat)
     }
   },
-  async ({ entityNames, depth }) => {
-    const context = await knowledgeGraphManager.getContext(entityNames, depth || 1);
+  async (input: any) => {
+    const context = await knowledgeGraphManager.getContext(input.threadId, input.entityNames, input.depth || 1);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(context, null, 2) }],
       structuredContent: { ...context }
@@ -933,12 +924,12 @@ server.registerTool(
   "get_observation_history",
   {
     title: "Get Observation History",
-    description: "Retrieve the full version chain for a specific observation, showing how it evolved over time",
+    description: "Retrieve the full version chain for a specific observation, showing how it evolved over time (thread isolation enforced)",
     inputSchema: GetObservationHistoryInputSchema,
     outputSchema: GetObservationHistoryOutputSchema
   },
-  async (input: GetObservationHistoryInput) => {
-    const result = await knowledgeGraphManager.getObservationHistory(input.entityName, input.observationId);
+  async (input: any) => {
+    const result = await knowledgeGraphManager.getObservationHistory(input.threadId, input.entityName, input.observationId);
     return {
       content: [{ type: "text" as const, text: JSON.stringify({ history: result }, null, 2) }],
       structuredContent: { history: result } as any
