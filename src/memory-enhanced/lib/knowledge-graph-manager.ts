@@ -115,14 +115,14 @@ export class KnowledgeGraphManager {
   }
 
   // Search Operations
-  async searchNodes(query: string, threadId: string): Promise<KnowledgeGraph> {
+  async searchNodes(threadId: string, query: string): Promise<KnowledgeGraph> {
     await this.ensureInitialized();
-    return SearchService.searchNodes(this.storage, query, threadId);
+    return SearchService.searchNodes(this.storage, threadId, query);
   }
 
-  async openNodes(names: string[], threadId: string): Promise<KnowledgeGraph> {
+  async openNodes(threadId: string, names: string[]): Promise<KnowledgeGraph> {
     await this.ensureInitialized();
-    return SearchService.openNodes(this.storage, names, threadId);
+    return SearchService.openNodes(this.storage, threadId, names);
   }
 
   async queryNodes(threadId: string, filters?: {

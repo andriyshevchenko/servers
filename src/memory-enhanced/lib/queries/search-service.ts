@@ -12,8 +12,8 @@ import { IStorageAdapter } from '../storage-interface.js';
  */
 export async function searchNodes(
   storage: IStorageAdapter,
-  query: string,
-  threadId: string
+  threadId: string,
+  query: string
 ): Promise<KnowledgeGraph> {
   const graph = await storage.loadGraph();
   
@@ -49,8 +49,8 @@ export async function searchNodes(
  */
 export async function openNodes(
   storage: IStorageAdapter,
-  names: string[],
-  threadId: string
+  threadId: string,
+  names: string[]
 ): Promise<KnowledgeGraph> {
   const graph = await storage.loadGraph();
   

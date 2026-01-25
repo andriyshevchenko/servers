@@ -37,8 +37,12 @@ export async function getMemoryStats(storage: IStorageAdapter, threadId: string)
     ? threadEntities.reduce((sum, e) => sum + e.importance, 0) / threadEntities.length
     : 0;
   
-  // Count unique threads in this specific thread (will always be 1)
-  const threads = new Set([threadId]);
+  // Count unique threads in the system (across all entities in the graph)
+  const threads = new Set<string>(
+    graph.entities
+      .map(e => e.agentThreadId)
+      .filter((id): id is string => !!id)
+  );
   
   // Recent activity (last 7 days, grouped by day) - only for this thread
   const now = new Date();

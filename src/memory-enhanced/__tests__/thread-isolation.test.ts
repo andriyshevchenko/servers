@@ -163,11 +163,11 @@ describe('Thread Isolation', () => {
 
   describe('searchNodes', () => {
     it('should only search within the specified thread', async () => {
-      const results1 = await manager.searchNodes('User', THREAD_1);
+      const results1 = await manager.searchNodes(THREAD_1, 'User');
       expect(results1.entities).toHaveLength(1);
       expect(results1.entities[0].name).toBe('User1');
 
-      const results2 = await manager.searchNodes('User', THREAD_2);
+      const results2 = await manager.searchNodes(THREAD_2, 'User');
       expect(results2.entities).toHaveLength(1);
       expect(results2.entities[0].name).toBe('User2');
     });
@@ -176,11 +176,11 @@ describe('Thread Isolation', () => {
   describe('openNodes', () => {
     it('should only open nodes from the specified thread', async () => {
       // Try to open User2 in thread 1 - should return empty
-      const result1 = await manager.openNodes(['User2'], THREAD_1);
+      const result1 = await manager.openNodes(THREAD_1, ['User2']);
       expect(result1.entities).toHaveLength(0);
 
       // Open User2 in thread 2 - should succeed
-      const result2 = await manager.openNodes(['User2'], THREAD_2);
+      const result2 = await manager.openNodes(THREAD_2, ['User2']);
       expect(result2.entities).toHaveLength(1);
       expect(result2.entities[0].name).toBe('User2');
     });

@@ -444,7 +444,7 @@ server.registerTool(
     }
   },
   async (input: any) => {
-    const graph = await knowledgeGraphManager.searchNodes(input.query, input.threadId);
+    const graph = await knowledgeGraphManager.searchNodes(input.threadId, input.query);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(graph, null, 2) }],
       structuredContent: { ...graph }
@@ -465,7 +465,7 @@ server.registerTool(
     }
   },
   async (input: any) => {
-    const graph = await knowledgeGraphManager.openNodes(input.names, input.threadId);
+    const graph = await knowledgeGraphManager.openNodes(input.threadId, input.names);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(graph, null, 2) }],
       structuredContent: { ...graph }

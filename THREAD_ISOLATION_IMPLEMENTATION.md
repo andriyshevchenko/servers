@@ -102,7 +102,6 @@ Affected tools:
 
 ### What is NOT Isolated (By Design)
 1. **`list_conversations`**: Lists all threads (this is the only way to discover available threads)
-2. **Entity Names**: While entities themselves are isolated, the fact that a name exists is not secret between threads (used for uniqueness validation)
 
 ## Testing
 
