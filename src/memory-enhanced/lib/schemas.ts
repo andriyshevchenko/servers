@@ -61,8 +61,8 @@ export const SaveMemoryEntitySchema = z.object({
 });
 
 export const SaveMemoryInputSchema = z.object({
-  entities: z.array(SaveMemoryEntitySchema).min(1).describe("Array of entities to save"),
-  threadId: z.string().min(1).describe("Thread ID for this conversation/project")
+  threadId: z.string().min(1).describe("Thread ID for this conversation/project"),
+  entities: z.array(SaveMemoryEntitySchema).min(1).describe("Array of entities to save")
 });
 
 export const SaveMemoryOutputSchema = z.object({
@@ -135,8 +135,8 @@ export const ListEntitiesOutputSchema = z.object({
 
 // Schema for validate_memory tool (Pre-Validation)
 export const ValidateMemoryInputSchema = z.object({
-  entities: z.array(SaveMemoryEntitySchema).min(1).describe("Array of entities to validate"),
-  threadId: z.string().min(1).describe("Thread ID for this conversation/project")
+  threadId: z.string().min(1).describe("Thread ID for this conversation/project"),
+  entities: z.array(SaveMemoryEntitySchema).min(1).describe("Array of entities to validate")
 });
 
 export const ValidateMemoryOutputSchema = z.object({
