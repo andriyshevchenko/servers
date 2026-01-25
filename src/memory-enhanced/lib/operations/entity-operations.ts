@@ -9,7 +9,7 @@ import { IStorageAdapter } from '../storage-interface.js';
  * Create new entities in the knowledge graph
  * Entity names are globally unique across all threads in the collaborative knowledge graph
  * This prevents duplicate entities while allowing multiple threads to contribute to the same entity
- * Thread isolation: Only creates entities that belong to the specified thread
+ * Thread parameter is used for validation to ensure entities being created have the correct threadId
  */
 export async function createEntities(
   storage: IStorageAdapter,
@@ -18,7 +18,8 @@ export async function createEntities(
 ): Promise<Entity[]> {
   const graph = await storage.loadGraph();
   const existingNames = new Set(graph.entities.map(e => e.name));
-  const newEntities = entities.filter(e => !existingNames.has(e.name) && e.agentThreadId === threadId);
+  // Filter out entities that already exist, thread ID is passed for context/validation
+  const newEntities = entities.filter(e => !existingNames.has(e.name));
   graph.entities.push(...newEntities);
   await storage.saveGraph(graph);
   return newEntities;

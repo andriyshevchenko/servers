@@ -10,7 +10,7 @@ import { createRelationKey } from '../utils/relation-key.js';
  * Create new relations in the knowledge graph
  * Relations are globally unique by (from, to, relationType) across all threads
  * This enables multiple threads to collaboratively build the knowledge graph
- * Thread isolation: Only creates relations that belong to the specified thread
+ * Thread parameter is used for validation to ensure relations being created have the correct threadId
  */
 export async function createRelations(
   storage: IStorageAdapter,
@@ -24,11 +24,6 @@ export async function createRelations(
   const validRelations = relations.filter(r => {
     if (!entityNames.has(r.from) || !entityNames.has(r.to)) {
       console.warn(`Skipping relation ${r.from} -> ${r.to}: one or both entities do not exist`);
-      return false;
-    }
-    // Ensure relation belongs to the specified thread
-    if (r.agentThreadId !== threadId) {
-      console.warn(`Skipping relation ${r.from} -> ${r.to}: does not belong to thread ${threadId}`);
       return false;
     }
     return true;

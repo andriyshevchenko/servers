@@ -11,7 +11,7 @@ import { validateObservationNotSuperseded, createObservationVersion } from '../u
 /**
  * Add observations to entities
  * Checks for duplicate content and creates version chains when content is updated
- * Thread isolation: Only adds observations to entities in the specified thread
+ * Thread parameter is used for validation to ensure only entities in the thread are modified
  */
 export async function addObservations(
   storage: IStorageAdapter,
@@ -27,6 +27,7 @@ export async function addObservations(
 ): Promise<{ entityName: string; addedObservations: Observation[] }[]> {
   const graph = await storage.loadGraph();
   const results = observations.map(o => {
+    // Find entity - thread validation happens here to ensure we only modify entities from this thread
     const entity = graph.entities.find(e => e.name === o.entityName && e.agentThreadId === threadId);
     if (!entity) {
       throw new Error(`Entity with name ${o.entityName} not found in thread ${threadId}`);
@@ -82,7 +83,7 @@ export async function addObservations(
 /**
  * Delete observations from entities
  * Supports deletion by content (backward compatibility) or by ID
- * Thread isolation: Only deletes observations from entities in the specified thread
+ * Thread parameter is used for validation to ensure only entities in the thread are modified
  */
 export async function deleteObservations(
   storage: IStorageAdapter,
@@ -91,6 +92,7 @@ export async function deleteObservations(
 ): Promise<void> {
   const graph = await storage.loadGraph();
   deletions.forEach(d => {
+    // Find entity - thread validation happens here to ensure we only modify entities from this thread
     const entity = graph.entities.find(e => e.name === d.entityName && e.agentThreadId === threadId);
     if (entity) {
       // Delete observations by content (for backward compatibility) or by ID

@@ -178,8 +178,8 @@ server.registerTool(
   async (input: any) => {
     const result = await handleSaveMemory(
       input as SaveMemoryInput,
-      (entities) => knowledgeGraphManager.createEntities(entities),
-      (relations) => knowledgeGraphManager.createRelations(relations),
+      (threadId, entities) => knowledgeGraphManager.createEntities(threadId, entities),
+      (threadId, relations) => knowledgeGraphManager.createRelations(threadId, relations),
       (threadId) => knowledgeGraphManager.getEntityNamesInThread(threadId)
     );
     
@@ -359,7 +359,8 @@ server.registerTool(
     inputSchema: UpdateObservationInputSchema.shape,
     outputSchema: UpdateObservationOutputSchema.shape
   },
-  async ({ entityName, observationId, newContent, agentThreadId, timestamp, confidence, importance }) => {
+  async (input: any) => {
+    const { entityName, observationId, newContent, agentThreadId, timestamp, confidence, importance } = input;
     const updatedObservation = await knowledgeGraphManager.updateObservation({
       entityName,
       observationId,
