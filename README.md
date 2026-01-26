@@ -1,5 +1,10 @@
 # Atomic Memory MCP Server
 
+[![npm version](https://badge.fury.io/js/server-memory-enhanced.svg)](https://www.npmjs.com/package/server-memory-enhanced)
+[![CI Status](https://github.com/andriyshevchenko/atomic-memory-mcp/workflows/CI/badge.svg)](https://github.com/andriyshevchenko/atomic-memory-mcp/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub stars](https://img.shields.io/github/stars/andriyshevchenko/atomic-memory-mcp.svg?style=social&label=Star)](https://github.com/andriyshevchenko/atomic-memory-mcp)
+
 > **Persistent memory for long conversations** - Never lose context across multiple Claude chats or Copilot sessions
 
 A Model Context Protocol (MCP) server that provides persistent memory management for AI conversations through a knowledge graph. Designed to solve the context loss problem in very long conversations by enabling **atomic memory snapshots** that can be shared across multiple agents and chat sessions.
@@ -48,6 +53,27 @@ Atomic Memory MCP Server provides:
    - Completes task: Sets up Supabase with email auth
    - Saves results: Connection strings, schema details
 3. **Chat 1 (Main)**: Continues with full context of what was set up
+
+## 🌟 Why Choose Atomic Memory MCP?
+
+### vs. Traditional Chat History
+- ✅ **Structured Knowledge** - Facts stored as queryable graph, not flat text
+- ✅ **Persistent Across Sessions** - Knowledge survives chat restarts
+- ✅ **Multi-Agent Coordination** - Share context between dozens of agents
+- ✅ **Selective Context** - Retrieve only relevant information, not entire history
+
+### vs. Other Memory Solutions
+- ✅ **True Atomicity** - Each fact is independent and updateable
+- ✅ **Version History** - Track how knowledge evolves over time
+- ✅ **Graph Relations** - Understand how entities connect
+- ✅ **Multiple Backends** - Start with JSONL, scale to Neo4j
+- ✅ **MCP Native** - Works with Claude Desktop, GitHub Copilot, and any MCP client
+
+### Perfect For
+- 🎯 **Large Projects** - Spanning multiple days/weeks with many agents
+- 🎯 **Complex Workflows** - Breaking down tasks across specialized agents
+- 🎯 **Knowledge Building** - Accumulating project knowledge over time
+- 🎯 **Team Coordination** - Sharing context between team members' agents
 
 ## 🚀 Installation
 
