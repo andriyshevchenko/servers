@@ -75,24 +75,21 @@ Atomic Memory MCP Server provides:
 - 🎯 **Knowledge Building** - Accumulating project knowledge over time
 - 🎯 **Team Coordination** - Sharing context between team members' agents
 
-## 🚀 Installation
+## 🚀 Quick Start (2 minutes)
 
-### For Claude Desktop
+### 1. Install with npx (No installation needed!)
 
-Add to your Claude Desktop configuration file:
+**For Claude Desktop** - Add to your config file:
 
-**MacOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-**Windows**: `%APPDATA%/Claude/claude_desktop_config.json`
+MacOS: `~/Library/Application Support/Claude/claude_desktop_config.json`  
+Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 
 ```json
 {
   "mcpServers": {
     "memory": {
       "command": "npx",
-      "args": [
-        "-y",
-        "server-memory-enhanced"
-      ],
+      "args": ["-y", "server-memory-enhanced"],
       "env": {
         "MEMORY_DIR_PATH": "/absolute/path/to/memory-data"
       }
@@ -101,9 +98,7 @@ Add to your Claude Desktop configuration file:
 }
 ```
 
-### For VSCode with Copilot
-
-Create or update `.mcp.json` in your project root:
+**For GitHub Copilot in VSCode** - Create `.mcp.json` in your project:
 
 ```json
 {
@@ -120,9 +115,35 @@ Create or update `.mcp.json` in your project root:
 }
 ```
 
-### With Neo4j (Optional)
+### 2. Try it immediately
 
-For better performance and visualization on large knowledge graphs:
+Restart Claude/VSCode, then try this:
+
+```
+Save to memory: I'm learning React and just completed the hooks tutorial
+```
+
+```
+What do I have in memory about React?
+```
+
+That's it! 🎉 Your memory is now persistent across all chat sessions.
+
+### 3. Explore Examples
+
+Check out real-world examples in the [`examples/`](./examples) directory:
+- [E-commerce project with multiple agents](./examples/ecommerce-project.md)
+- [Multi-agent development workflow](./examples/multi-agent-development.md)
+
+## 📦 Advanced Installation Options
+
+### Option 1: npx (Recommended - No installation!)
+
+See [Quick Start](#-quick-start-2-minutes) above.
+
+### Option 2: With Neo4j for Graph Visualization
+
+For better performance and visual knowledge graph exploration on large datasets:
 
 ```json
 {
