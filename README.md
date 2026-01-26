@@ -65,7 +65,7 @@ Add to your Claude Desktop configuration file:
       "command": "npx",
       "args": [
         "-y",
-        "server-memory-enhanced"
+        "@modelcontextprotocol/server-atomic-memory"
       ],
       "env": {
         "MEMORY_DIR_PATH": "/absolute/path/to/memory-data"
@@ -85,7 +85,7 @@ Create or update `.mcp.json` in your project root:
     "memory": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "server-memory-enhanced"],
+      "args": ["-y", "@modelcontextprotocol/server-atomic-memory"],
       "env": {
         "MEMORY_DIR_PATH": "./memory-data"
       }
@@ -103,7 +103,7 @@ For better performance and visualization on large knowledge graphs:
   "mcpServers": {
     "memory": {
       "command": "npx",
-      "args": ["-y", "server-memory-enhanced"],
+      "args": ["-y", "@modelcontextprotocol/server-atomic-memory"],
       "env": {
         "NEO4J_URI": "neo4j://localhost:7687",
         "NEO4J_USERNAME": "neo4j",

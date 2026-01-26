@@ -138,7 +138,7 @@ export NEO4J_PASSWORD=password
 export NEO4J_DATABASE=neo4j  # Optional
 
 # Start server - automatically uses Neo4j
-npx mcp-server-memory-enhanced
+npx @modelcontextprotocol/server-atomic-memory
 ```
 
 If Neo4j is not configured or connection fails, the server automatically falls back to JSONL storage.

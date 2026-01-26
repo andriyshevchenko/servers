@@ -1,9 +1,9 @@
 {
-  "name": "server-memory-enhanced",
-  "version": "3.1.0",
+  "name": "@modelcontextprotocol/server-atomic-memory",
+  "version": "3.2.0",
   "description": "Persistent memory for long conversations - MCP server for knowledge graph with atomic facts, cross-chat memory sharing, and multi-agent delegation",
   "license": "MIT",
-  "mcpName": "io.github.modelcontextprotocol/server-memory-enhanced",
+  "mcpName": "io.github.modelcontextprotocol/server-atomic-memory",
   "author": "Andriy Shevchenko",
   "repository": {
     "type": "git",
@@ -25,7 +25,7 @@
   ],
   "type": "module",
   "bin": {
-    "mcp-server-memory-enhanced": "dist/index.js"
+    "mcp-server-atomic-memory": "dist/index.js"
   },
   "files": [
     "dist"

@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2026-01-26
+
+### Changed
+
+#### Package Rename
+- **Renamed package** from `server-memory-enhanced` to `@modelcontextprotocol/server-atomic-memory`
+  - Better aligns with repository name (atomic-memory-mcp)
+  - Emphasizes the unique "atomic facts" concept (max 300 chars, 1-3 sentences)
+  - Follows MCP convention: @modelcontextprotocol/server-* pattern
+  - Improved clarity and discoverability
+- **Binary renamed** from `mcp-server-memory-enhanced` to `mcp-server-atomic-memory`
+- **Updated installation examples** in README.md to use new package name
+- **Migration**: Update your config files to use `@modelcontextprotocol/server-atomic-memory` instead of `server-memory-enhanced`
+
 ## [3.1.0] - 2025-01-26
 
 ### Added
