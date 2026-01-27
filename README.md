@@ -40,15 +40,6 @@ Atomic Memory MCP Server provides:
                     └────────────────┘
 ```
 
-**Example Workflow:**
-1. **Chat 1 (Main)**: "Set up authentication for our app"
-   - Saves facts: Project uses Supabase, needs email auth, etc.
-2. **Chat 2 (Delegate)**: "Set up Supabase"
-   - Reads memory: Learns about project context
-   - Completes task: Sets up Supabase with email auth
-   - Saves results: Connection strings, schema details
-3. **Chat 1 (Main)**: Continues with full context of what was set up
-
 ## 🚀 Installation
 
 ### For Claude Desktop
@@ -130,9 +121,16 @@ Access Neo4j Browser at http://localhost:7474 to visualize your knowledge graph.
 
 **Prompt to use regularly:**
 ```
-Capture a 100% comprehensive snapshot of current conversation state to memory.
-Include key decisions, configurations, and important context we've discussed.
-Validate memory first. Don't store all at once, apply incremental updates
+Capture a comprehensive memory snapshot of the conversation.
+
+Include these entities and relations
+
+(:Fact)-[:SUPERSEDES]->(:Fact)
+(:Decision)-[:INVALIDATES]->(:Decision)
+
+Validate memory first.
+
+Don't store all at once, apply incremental updates. One step a a time.
 ```
 
 #### 2. Restoring Context in New Chat
@@ -161,49 +159,6 @@ I've been delegated to set up Supabase. Please read the memory to understand:
 - Any other relevant context
 
 Then help me set up Supabase accordingly.
-```
-
-### Prompt Examples
-
-#### Example 1: Starting a New Project
-```
-We're starting a new e-commerce project called "ShopFast".
-Please save this information to memory:
-- Project: ShopFast e-commerce platform
-- Tech stack: Next.js 14, TypeScript, Tailwind CSS
-- Backend: Supabase (PostgreSQL + Auth)
-- Payment: Stripe integration
-- Hosting: Vercel
-```
-
-#### Example 2: After Making Progress
-```
-We just completed the authentication setup. Please snapshot to memory:
-- Implemented email/password auth with Supabase
-- Added Google OAuth provider
-- Created user profiles table with schema: id, email, name, avatar_url
-- Set up Row Level Security policies
-- Auth working in dev environment
-```
-
-#### Example 3: Before Delegating
-```
-I need to delegate the payment integration to another agent.
-Save to memory:
-- We're using Stripe for payments
-- Need to support one-time purchases and subscriptions
-- Product prices: Basic ($9.99/mo), Pro ($29.99/mo), Enterprise (custom)
-- Webhook endpoint should be /api/webhooks/stripe
-- Test mode keys are in .env.local
-```
-
-#### Example 4: Checking What's Done
-```
-What progress have we made on the ShopFast project? 
-Please search memory for:
-- Completed features
-- Current status of authentication, payment, and frontend
-- Any pending issues or TODOs
 ```
 
 ## 🔧 Available APIs
