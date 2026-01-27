@@ -141,26 +141,6 @@ Restore full context for thread "linkedin-outreach-mvp" using memory tools.
 Next proceed with [specific task].
 ```
 
-#### 3. Delegating Tasks
-
-**In Main Chat:**
-```
-I'm going to delegate setting up Supabase to another agent. 
-Please save all relevant context about our authentication requirements,
-database schema plans, and project structure to memory.
-```
-
-**In Delegated Chat:**
-```
-I've been delegated to set up Supabase. Please read the memory to understand:
-- Project requirements
-- Authentication needs
-- Database schema
-- Any other relevant context
-
-Then help me set up Supabase accordingly.
-```
-
 ## 🔧 Available APIs
 
 ### 🌟 Recommended Tools
@@ -323,13 +303,6 @@ The real power of Atomic Memory MCP is enabling seamless work across dozens of a
                     │   Knowledge Graph      │
                     └────────────────────┘
 ```
-
-**Use Cases Beyond Code:**
-- **Writing**: Multiple agents working on different book chapters
-- **Research**: Agents exploring different topics, sharing findings
-- **Planning**: Break down complex projects across specialist agents
-- **Learning**: Agents teaching different concepts, building on each other
-- **Creative**: Collaborative story writing, game design, etc.
 
 Each agent can:
 1. ✅ Read full context from shared memory
