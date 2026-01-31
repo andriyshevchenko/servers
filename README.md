@@ -121,7 +121,7 @@ Access Neo4j Browser at http://localhost:7474 to visualize your knowledge graph.
 
 **Prompt to use regularly:**
 ```
-Capture a comprehensive memory snapshot of the conversation in the given format:
+Update the memory. Follow this protocol:
 
 (Decision)-[:CAUSES]->(Decision)
 (Decision)-[:INVALIDATES]->(Assumption)
@@ -132,10 +132,8 @@ Capture a comprehensive memory snapshot of the conversation in the given format:
 (Entity)-[:RELATES_TO]->(Entity)
 
 Validate memory first.
-
 Nods and edges must be atomic.
-
-Apply incremental updates. One step a a time.
+Apply incremental updates, one step a a time.
 ```
 
 #### 2. Restoring Context in New Chat
