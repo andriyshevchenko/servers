@@ -174,7 +174,7 @@ export const UpdateObservationOutputSchema = z.object({
 // Schema for read_graph tool
 export const ReadGraphInputSchema = z.object({
   threadId: z.string().min(1).describe("Thread ID for this conversation/project"),
-  minImportance: z.number().min(0).max(1).optional().default(0.1).describe("Minimum importance threshold for filtering entities/relations (default: 0.1). Items below this threshold are excluded. Items between minImportance and 0.1 are marked as ARCHIVED.")
+  minImportance: z.number().min(0).max(1).optional().default(0.1).describe("Minimum importance threshold for filtering entities/relations (default: 0.1). Items below this threshold are excluded. Items with importance >= minImportance and < 0.1 are marked as ARCHIVED.")
 });
 
 // Schema for search_nodes tool

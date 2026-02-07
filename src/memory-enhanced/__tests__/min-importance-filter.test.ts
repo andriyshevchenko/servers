@@ -311,6 +311,47 @@ describe('MinImportance Filter for read_graph', () => {
   });
 
   describe('Observation importance and ARCHIVED status', () => {
+    it('should filter out observations with importance < minImportance', async () => {
+      const obs1: Observation = {
+        id: 'obs-1',
+        content: 'High importance observation',
+        timestamp: '2024-01-20T10:00:00Z',
+        version: 1,
+        agentThreadId: 'thread-001',
+        importance: 0.8
+      };
+
+      const obs2: Observation = {
+        id: 'obs-2',
+        content: 'Low importance observation',
+        timestamp: '2024-01-20T10:01:00Z',
+        version: 1,
+        agentThreadId: 'thread-001',
+        importance: 0.03
+      };
+
+      const entities: Entity[] = [
+        {
+          name: 'EntityWithMixedObs',
+          entityType: 'task',
+          observations: [obs1, obs2],
+          agentThreadId: 'thread-001',
+          timestamp: '2024-01-20T10:00:00Z',
+          confidence: 0.9,
+          importance: 0.5
+        }
+      ];
+
+      await manager.createEntities('thread-001', entities);
+      
+      // Read with minImportance of 0.05 - should filter out obs2
+      const graph = await manager.readGraph('thread-001', 0.05);
+      
+      expect(graph.entities).toHaveLength(1);
+      expect(graph.entities[0].observations).toHaveLength(1);
+      expect(graph.entities[0].observations[0].id).toBe('obs-1');
+    });
+
     it('should mark observations with importance < 0.1 as ARCHIVED when they inherit from entity', async () => {
       const obs1: Observation = {
         id: 'obs-1',

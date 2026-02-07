@@ -23,16 +23,24 @@ export async function readGraph(
   const filteredEntities = threadEntities
     .filter(e => e.importance >= minImportance)
     .map(entity => {
-      // Mark entity as ARCHIVED if importance is less than 0.1 but meets minImportance
-      const entityWithStatus: Entity = {
-        ...entity,
-        observations: entity.observations.map(obs => {
+      // Filter observations by importance
+      const filteredObservations = entity.observations
+        .filter(obs => {
+          const obsImportance = obs.importance ?? entity.importance;
+          return obsImportance >= minImportance;
+        })
+        .map(obs => {
           const obsImportance = obs.importance ?? entity.importance;
           if (obsImportance >= minImportance && obsImportance < 0.1) {
             return { ...obs, status: 'ARCHIVED' as const };
           }
           return obs;
-        })
+        });
+      
+      // Mark entity as ARCHIVED if importance is less than 0.1 but meets minImportance
+      const entityWithStatus: Entity = {
+        ...entity,
+        observations: filteredObservations
       };
       
       if (entity.importance >= minImportance && entity.importance < 0.1) {
