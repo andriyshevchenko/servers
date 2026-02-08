@@ -434,4 +434,75 @@ describe('minImportance filtering in readGraph', () => {
     expect(result.entities).toHaveLength(1);
     expect(result.entities[0].name).toBe('Entity Above Default');
   });
+
+  it('should clear pre-existing status values for non-archived items', async () => {
+    const threadId = 'test-thread';
+    
+    // Create graph with pre-existing status values
+    const testGraph: KnowledgeGraph = {
+      entities: [
+        {
+          name: 'High Importance Entity',
+          entityType: 'Test',
+          observations: [
+            {
+              id: 'obs-1',
+              content: 'Test observation',
+              timestamp: '2024-01-01T00:00:00Z',
+              version: 1,
+              agentThreadId: threadId,
+              importance: 0.8,
+              status: 'ARCHIVED' as const // Pre-existing status that should be cleared
+            }
+          ],
+          agentThreadId: threadId,
+          timestamp: '2024-01-01T00:00:00Z',
+          confidence: 1.0,
+          importance: 0.8,
+          status: 'ARCHIVED' as const // Pre-existing status that should be cleared
+        },
+        {
+          name: 'Archived Entity',
+          entityType: 'Test',
+          observations: [],
+          agentThreadId: threadId,
+          timestamp: '2024-01-01T00:00:00Z',
+          confidence: 1.0,
+          importance: 0.06,
+          status: 'ARCHIVED' as const // Pre-existing status that should be kept (item is actually archived)
+        }
+      ],
+      relations: [
+        {
+          from: 'High Importance Entity',
+          to: 'Archived Entity',
+          relationType: 'relates to',
+          agentThreadId: threadId,
+          timestamp: '2024-01-01T00:00:00Z',
+          confidence: 1.0,
+          importance: 0.9,
+          status: 'ARCHIVED' as const // Pre-existing status that should be cleared
+        }
+      ]
+    };
+
+    storage.setGraph(testGraph);
+    
+    // Read with minImportance = 0.05
+    const result = await readGraph(storage, threadId, 0.05);
+    
+    // High importance entity should NOT have status
+    expect(result.entities[0].name).toBe('High Importance Entity');
+    expect(result.entities[0].status).toBeUndefined();
+    
+    // High importance observation should NOT have status
+    expect(result.entities[0].observations[0].status).toBeUndefined();
+    
+    // Archived entity SHOULD have status='ARCHIVED'
+    expect(result.entities[1].name).toBe('Archived Entity');
+    expect(result.entities[1].status).toBe('ARCHIVED');
+    
+    // High importance relation should NOT have status
+    expect(result.relations[0].status).toBeUndefined();
+  });
 });

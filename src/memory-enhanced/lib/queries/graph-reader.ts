@@ -43,10 +43,29 @@ function stripObservationStatus(obs: Observation): Observation {
 
 /**
  * Strip status from an entity and its observations (used to clean persisted status values)
+ * Optimized to avoid unnecessary copies when only entity status needs stripping
  */
 function stripEntityStatus(entity: Entity): Entity {
   if (!entityHasStatus(entity)) return entity;
   
+  const entityHasOwnStatus = entity.status !== undefined;
+  const observationsHaveStatus = entity.observations.some(hasStatus);
+  
+  // If only observations have status, keep entity as-is and just map observations
+  if (!entityHasOwnStatus && observationsHaveStatus) {
+    return {
+      ...entity,
+      observations: entity.observations.map(stripObservationStatus),
+    };
+  }
+  
+  // If only entity has status, strip it but keep observations as-is
+  if (entityHasOwnStatus && !observationsHaveStatus) {
+    const { status: _oldStatus, ...entityWithoutStatus } = entity;
+    return entityWithoutStatus;
+  }
+  
+  // Both entity and observations have status
   const { status: _oldStatus, ...entityWithoutStatus } = entity;
   return {
     ...entityWithoutStatus,
@@ -106,13 +125,20 @@ export async function readGraph(
       };
       
       // Process observations: filter by importance and add ARCHIVED status
+      // Defensive: handle potential legacy string observations by skipping them
       entityWithStatus.observations = entity.observations
         .filter(obs => {
+          // Skip if not an Observation object (defensive against legacy data)
+          if (typeof obs !== 'object' || obs === null) return true;
+          
           // Use observation importance if set, otherwise inherit from entity
           const obsImportance = obs.importance !== undefined ? obs.importance : entity.importance;
           return obsImportance >= minImportance;
         })
         .map(obs => {
+          // Pass through if not an Observation object (defensive against legacy data)
+          if (typeof obs !== 'object' || obs === null) return obs;
+          
           const obsImportance = obs.importance !== undefined ? obs.importance : entity.importance;
           const isObsArchived = obsImportance < ARCHIVED_THRESHOLD && obsImportance >= minImportance;
           const { status: _oldObsStatus, ...obsWithoutStatus } = obs;
