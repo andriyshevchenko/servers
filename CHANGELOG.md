@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Technical Details:**
 - Added optional `status` field to Entity, Relation, and Observation types/schemas
 - Enhanced graph-reader.ts with importance filtering and ARCHIVED status marking
-- Comprehensive test coverage with 9 new test cases validating all filtering scenarios
+- Comprehensive test coverage with new test cases validating all filtering scenarios
 - Backward compatible: existing code continues to work with default behavior
 
 ## [3.1.0] - 2025-01-26
