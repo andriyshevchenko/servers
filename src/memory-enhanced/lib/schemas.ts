@@ -3,6 +3,7 @@
  */
 
 import { z } from "zod";
+import { ARCHIVED_THRESHOLD } from "./queries/graph-reader.js";
 
 // Schema for Observation with versioning support
 export const ObservationSchema = z.object({
@@ -14,8 +15,12 @@ export const ObservationSchema = z.object({
   superseded_by: z.string().optional().describe("ID of observation that supersedes this one"),
   agentThreadId: z.string().describe("Thread that created this observation"),
   confidence: z.number().min(0).max(1).optional().describe("Confidence in accuracy (0-1, optional, inherits from entity if not set)"),
-  importance: z.number().min(0).max(1).optional().describe("Importance for memory integrity (0-1, optional, inherits from entity if not set)")
+  importance: z.number().min(0).max(1).optional().describe("Importance for memory integrity (0-1, optional, inherits from entity if not set)"),
+  status: z.literal('ARCHIVED').optional().describe("Status indicator - set to 'ARCHIVED' for low-importance items")
 });
+
+// Input schema for observations (excludes status field which is computed)
+export const ObservationInputSchema = ObservationSchema.omit({ status: true }).strict();
 
 // Schema for existing tools
 export const EntitySchema = z.object({
@@ -25,8 +30,14 @@ export const EntitySchema = z.object({
   agentThreadId: z.string().describe("Agent thread that created/modified this entity"),
   timestamp: z.string().describe("ISO 8601 timestamp of creation/modification"),
   confidence: z.number().min(0).max(1).describe("Confidence in the accuracy of this entity (0-1)"),
-  importance: z.number().min(0).max(1).describe("Importance for memory integrity if lost: 0 (not important) to 1 (critical)")
+  importance: z.number().min(0).max(1).describe("Importance for memory integrity if lost: 0 (not important) to 1 (critical)"),
+  status: z.literal('ARCHIVED').optional().describe("Status indicator - set to 'ARCHIVED' for low-importance items")
 });
+
+// Input schema for entities (excludes status field which is computed, uses input observations)
+export const EntityInputSchema = EntitySchema.omit({ status: true, observations: true }).extend({
+  observations: z.array(ObservationInputSchema).describe("Versioned observations about this entity")
+}).strict();
 
 export const RelationSchema = z.object({
   from: z.string().describe("Source entity name"),
@@ -35,8 +46,12 @@ export const RelationSchema = z.object({
   agentThreadId: z.string().describe("Agent thread that created/modified this relation"),
   timestamp: z.string().describe("ISO 8601 timestamp of creation/modification"),
   confidence: z.number().min(0).max(1).describe("Confidence in the accuracy of this relation (0-1)"),
-  importance: z.number().min(0).max(1).describe("Importance for memory integrity if lost: 0 (not important) to 1 (critical)")
+  importance: z.number().min(0).max(1).describe("Importance for memory integrity if lost: 0 (not important) to 1 (critical)"),
+  status: z.literal('ARCHIVED').optional().describe("Status indicator - set to 'ARCHIVED' for low-importance items")
 });
+
+// Input schema for relations (excludes status field which is computed)
+export const RelationInputSchema = RelationSchema.omit({ status: true }).strict();
 
 // Schema for save_memory tool (Section 1 of spec)
 export const SaveMemoryRelationSchema = z.object({
@@ -170,7 +185,8 @@ export const UpdateObservationOutputSchema = z.object({
 
 // Schema for read_graph tool
 export const ReadGraphInputSchema = z.object({
-  threadId: z.string().min(1).describe("Thread ID for this conversation/project")
+  threadId: z.string().min(1).describe("Thread ID for this conversation/project"),
+  minImportance: z.number().min(0).max(1).optional().default(ARCHIVED_THRESHOLD).describe(`Minimum importance threshold (0-1). Items with importance below this value are excluded. Items with importance between minImportance and ${ARCHIVED_THRESHOLD} are marked as ARCHIVED. Default: ${ARCHIVED_THRESHOLD}`)
 });
 
 // Schema for search_nodes tool
@@ -235,7 +251,7 @@ export const GetContextInputSchema = z.object({
 // Schema for create_entities tool
 export const CreateEntitiesInputSchema = z.object({
   threadId: z.string().min(1).describe("Thread ID for this conversation/project"),
-  entities: z.array(EntitySchema).describe("Array of entities to create")
+  entities: z.array(EntityInputSchema).describe("Array of entities to create")
 }).superRefine((data, ctx) => {
   const { threadId, entities } = data;
   entities.forEach((entity, index) => {
@@ -252,7 +268,7 @@ export const CreateEntitiesInputSchema = z.object({
 // Schema for create_relations tool
 export const CreateRelationsInputSchema = z.object({
   threadId: z.string().min(1).describe("Thread ID for this conversation/project"),
-  relations: z.array(RelationSchema).describe("Array of relations to create")
+  relations: z.array(RelationInputSchema).describe("Array of relations to create")
 }).superRefine((data, ctx) => {
   const { threadId, relations } = data;
   relations.forEach((relation, index) => {
@@ -307,7 +323,7 @@ export const DeleteObservationsInputSchema = z.object({
 // Schema for delete_relations tool
 export const DeleteRelationsInputSchema = z.object({
   threadId: z.string().min(1).describe("Thread ID for this conversation/project"),
-  relations: z.array(RelationSchema).describe("An array of relations to delete")
+  relations: z.array(RelationInputSchema).describe("An array of relations to delete")
 });
 
 // Schema for prune_memory tool

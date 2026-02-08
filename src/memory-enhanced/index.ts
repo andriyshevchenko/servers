@@ -409,7 +409,7 @@ server.registerTool(
   "read_graph",
   {
     title: "Read Graph",
-    description: "Read the knowledge graph for a specific thread (thread isolation enforced)",
+    description: "Read the knowledge graph for a specific thread (thread isolation enforced). Supports filtering by minimum importance threshold.",
     inputSchema: ReadGraphInputSchema,
     outputSchema: {
       entities: z.array(EntitySchemaCompat),
@@ -417,7 +417,8 @@ server.registerTool(
     }
   },
   async (input: any) => {
-    const graph = await knowledgeGraphManager.readGraph(input.threadId);
+    const { threadId, minImportance } = input;
+    const graph = await knowledgeGraphManager.readGraph(threadId, minImportance);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(graph, null, 2) }],
       structuredContent: { ...graph }

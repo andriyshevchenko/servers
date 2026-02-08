@@ -4,6 +4,7 @@
 
 import { KnowledgeGraph } from '../types.js';
 import { IStorageAdapter } from '../storage-interface.js';
+import { stripGraphStatus } from './graph-reader.js';
 
 /**
  * Search for nodes in the knowledge graph by query string
@@ -39,7 +40,8 @@ export async function searchNodes(
     relations: filteredRelations,
   };
 
-  return filteredGraph;
+  // Strip any persisted status values to prevent leaking stale data
+  return stripGraphStatus(filteredGraph);
 }
 
 /**
@@ -73,7 +75,8 @@ export async function openNodes(
     relations: filteredRelations,
   };
 
-  return filteredGraph;
+  // Strip any persisted status values to prevent leaking stale data
+  return stripGraphStatus(filteredGraph);
 }
 
 /**
@@ -147,8 +150,11 @@ export async function queryNodes(
     return true;
   });
 
-  return {
+  const filteredGraph: KnowledgeGraph = {
     entities: filteredEntities,
     relations: filteredRelations,
   };
+
+  // Strip any persisted status values to prevent leaking stale data
+  return stripGraphStatus(filteredGraph);
 }

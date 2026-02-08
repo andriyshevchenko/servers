@@ -109,8 +109,12 @@ export class KnowledgeGraphManager {
   }
 
   // Graph Reading Operations
-  async readGraph(threadId: string): Promise<KnowledgeGraph> {
+  async readGraph(threadId: string, minImportance?: number): Promise<KnowledgeGraph> {
     await this.ensureInitialized();
+    // Pass minImportance if provided, otherwise let readGraph use its default
+    if (minImportance !== undefined) {
+      return GraphReader.readGraph(this.storage, threadId, minImportance);
+    }
     return GraphReader.readGraph(this.storage, threadId);
   }
 
