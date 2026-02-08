@@ -247,7 +247,7 @@ describe('minImportance filtering in readGraph', () => {
               content: 'Observation inheriting entity importance',
               timestamp: '2024-01-01T00:00:00Z',
               version: 1,
-              agentThreadId: threadId
+              agentThreadId: threadId,
               // No importance set, should inherit from entity (0.15)
             },
             {

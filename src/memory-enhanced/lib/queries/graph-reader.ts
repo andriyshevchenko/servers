@@ -2,8 +2,45 @@
  * Graph reading operations
  */
 
-import { KnowledgeGraph } from '../types.js';
+import { KnowledgeGraph, Entity, Relation, Observation } from '../types.js';
 import { IStorageAdapter } from '../storage-interface.js';
+
+/**
+ * Strip status from an observation (used to clean persisted status values)
+ */
+function stripObservationStatus(obs: Observation): Observation {
+  const { status: _oldStatus, ...obsWithoutStatus } = obs;
+  return obsWithoutStatus;
+}
+
+/**
+ * Strip status from an entity and its observations (used to clean persisted status values)
+ */
+function stripEntityStatus(entity: Entity): Entity {
+  const { status: _oldStatus, ...entityWithoutStatus } = entity;
+  return {
+    ...entityWithoutStatus,
+    observations: entity.observations.map(stripObservationStatus),
+  };
+}
+
+/**
+ * Strip status from a relation (used to clean persisted status values)
+ */
+function stripRelationStatus(relation: Relation): Relation {
+  const { status: _oldStatus, ...relationWithoutStatus } = relation;
+  return relationWithoutStatus;
+}
+
+/**
+ * Strip status from all entities and relations in a graph (used to clean persisted status values)
+ */
+export function stripGraphStatus(graph: KnowledgeGraph): KnowledgeGraph {
+  return {
+    entities: graph.entities.map(stripEntityStatus),
+    relations: graph.relations.map(stripRelationStatus),
+  };
+}
 
 /**
  * Read the knowledge graph filtered by threadId for thread isolation
