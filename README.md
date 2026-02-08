@@ -177,12 +177,32 @@ Atomically save entities and relations with full validation.
 ```
 
 #### `read_graph`
-Read the entire knowledge graph or filter by thread.
+Read the entire knowledge graph with optional filtering by thread and importance.
 
 ```typescript
 {
-  "agentThreadId": "optional-thread-id"
+  "agentThreadId": "optional-thread-id",
+  "minImportance": 0.1  // Optional, default: 0.1
 }
+```
+
+**Parameters:**
+- `agentThreadId` (optional) - Filter to a specific thread/conversation
+- `minImportance` (optional, default: 0.1) - Minimum importance threshold (0-1)
+  - Items with importance < `minImportance` are excluded
+  - Items with importance ≥ `minImportance` and < 0.1 receive `status: 'ARCHIVED'`
+  - ARCHIVED items may contain outdated information
+
+**Examples:**
+```typescript
+// Default: filters items with importance < 0.1
+{ "agentThreadId": "my-thread" }
+
+// Show all items including low-importance ones (mark [0.05, 0.1) as ARCHIVED)
+{ "agentThreadId": "my-thread", "minImportance": 0.05 }
+
+// Only show high-importance items
+{ "agentThreadId": "my-thread", "minImportance": 0.5 }
 ```
 
 #### `search_nodes`
